@@ -35,7 +35,10 @@ Reference images are style-only: never copy them or commit them.
 - Debug overlay: tap the HUD score 5 times (remembered on the device).
 - Live check (00a7a32): 66 unit tests pass; portrait + landscape at 390px; overlay toggles; a 45 s
   live run kept the song playing the whole time (0 silent samples); warm-up held 20 s.
-- **Waiting for the owner to test Stage 0 on the iPhone before starting Stage 1.**
+- Owner tested Stage 0 on iPhone: smooth, music survives taps and locking, loop point fine, bubbles readable.
+- [x] 0.7 Follow-up: subtle music stutter. Likely cause: playbackRate re-tuned every few seconds in 0.01
+  steps. Now changes only by >= 0.04 and at most every 4 s (~6 changes over the whole ramp). Needs
+  the owner's ear to confirm on iPhone.
 
 ## Stage 1: gameplay
 - [ ] 1.1 Lime-and-chilli boost: chilli pickups; 2 chillies hang a charm on the back of the bus; lime appears only after 2 chillies; lime completes the charm and starts the boost

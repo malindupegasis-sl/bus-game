@@ -6,8 +6,13 @@ const MUTE_KEY = 'busgame.muted';
 const SONG_URL = `${import.meta.env.BASE_URL}audio/song.mp3`;
 /** How often the watchdog checks the music (ms). */
 const WATCH_EVERY = 250;
-/** Only change the song's playbackRate in steps this big, at most every WATCH_EVERY ms. */
-const RATE_STEP = 0.01;
+/**
+ * Each playbackRate change makes the pitch-preserving stretcher re-tune, which can be heard as a
+ * tiny stutter on iOS. So only change it when the difference is big enough to notice, and not
+ * too often: ~6 changes over the whole 1.00 -> 1.25 ramp.
+ */
+const RATE_STEP = 0.04;
+const RATE_MIN_INTERVAL = 4000; // ms
 
 function loadMuted(): boolean {
   try {
@@ -118,6 +123,7 @@ export class AudioManager {
     this.stopMusic();
     this.wantMusic = true;
     this.rate = 1;
+    this.lastRateChange = -Infinity;
     if (this.ctx) this.beginMusic();
   }
 
@@ -161,11 +167,16 @@ export class AudioManager {
     else this.startSequencer();
   }
 
+  private lastRateChange = -Infinity;
+
   setRate(r: number): void {
     const next = Math.max(0.5, Math.min(MAX_MUSIC_RATE, r));
-    // Changing playbackRate re-tunes the pitch-preserving stretcher; doing that every frame can
-    // make iOS stutter, so only step it in small increments (applied by tick()).
-    if (Math.abs(next - this.rate) >= RATE_STEP || (next === MAX_MUSIC_RATE && this.rate !== next)) this.rate = next;
+    const now = performance.now();
+    const bigEnough = Math.abs(next - this.rate) >= RATE_STEP || (next === MAX_MUSIC_RATE && this.rate !== next);
+    if (bigEnough && now - this.lastRateChange >= RATE_MIN_INTERVAL) {
+      this.rate = next;
+      this.lastRateChange = now;
+    }
   }
 
   setMuted(m: boolean): void {
