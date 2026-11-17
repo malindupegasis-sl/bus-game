@@ -109,9 +109,21 @@ Reference images are style-only: never copy them or commit them.
 - Items 2.1-2.4 landed in one commit (they share the renderer and main).
 
 ## Stage 3: routes
-- [ ] 3.1 Route picker before a run: 138 (Colombo city) and Colombo to Kandy (route 1)
-- [ ] 3.2 138 scenery: busy streets, shops
-- [ ] 3.3 Colombo to Kandy scenery: hills, greenery, bends
-- [ ] 3.4 Separate high score per route (existing high score carries over to the 138)
-- [ ] 3.5 Rival buses show the selected route's number; gameplay identical across routes
+- [x] 3.1 Route picker before a run: 138 (Colombo city) and Colombo to Kandy (route 1)
+- [x] 3.2 138 scenery: busy streets, shops
+- [x] 3.3 Colombo to Kandy scenery: hills, greenery, bends
+- [x] 3.4 Separate high score per route (existing high score carries over to the 138)
+- [x] 3.5 Rival buses show the selected route's number; gameplay identical across routes
 - [ ] 3.6 Tests, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+
+### Stage 3 notes
+- ROUTE button on the start screen toggles 138 City / 1 Kandy; remembered on the device (busgame.route).
+- High scores: busgame.highscore (route 138, so the old high score carries over) and busgame.highscore.1.
+- Scenery lives in the 9px strip above and 8px strip below the road plus the road surface itself
+  (lanes and HUD take the rest of the 144px screen):
+  138: shophouse skyline with awnings/signboards, black-and-white kerbs, paved footpath with bollards,
+  shop awnings, darker road with manhole covers and an occasional (subtle) zebra crossing.
+  Kandy: layered green hills with a road winding over them and trees, red-earth shoulder, tea bushes,
+  bend warning signs and milestones, older patched and cracked road.
+- Gameplay identical: the World doesn't know the route (test: same seed -> same traffic and crash).
+- Items 3.1-3.5 landed in one commit.

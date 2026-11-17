@@ -8,6 +8,7 @@ import { GARAGE_PANEL_LEFT, Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
+import { ROUTES, loadRoute, nextRoute, saveRoute, type RouteId } from './game/routes';
 import { FIELD_LABELS, cycle, loadStyle, optionName, saveStyle, type BusStyle, type StyleField } from './game/garage';
 import { HUD, UI_RECTS, type Rect } from './ui-layout';
 
@@ -22,6 +23,7 @@ const btnMute = $<HTMLButtonElement>('#btn-mute');
 const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
 const btnGarage = $<HTMLButtonElement>('#btn-garage');
+const btnRoute = $<HTMLButtonElement>('#btn-route');
 const garagePanel = $<HTMLDivElement>('#garage');
 const garageRows = $<HTMLDivElement>('#garage-rows');
 const garageDone = $<HTMLButtonElement>('#garage-done');
@@ -29,7 +31,16 @@ const garageDone = $<HTMLButtonElement>('#garage-done');
 const renderer = new Renderer(canvas);
 let busStyle: BusStyle = loadStyle();
 renderer.style = busStyle;
-const game = new Game();
+
+/** Route: scenery theme, sign-board number and the title button label. */
+function applyRoute(r: RouteId): void {
+  renderer.route = ROUTES[r].number;
+  renderer.theme = ROUTES[r].theme;
+  renderer.routeButton = ROUTES[r].button;
+}
+let route: RouteId = loadRoute();
+applyRoute(route);
+const game = new Game(undefined, undefined, route);
 const audio = new AudioManager();
 renderer.touchHint = window.matchMedia('(pointer: coarse)').matches;
 renderer.muted = audio.muted;
@@ -78,6 +89,7 @@ place(btnMute, UI_RECTS.mute, 6);
 place(btnRetry, UI_RECTS.retry);
 place(btnShare, UI_RECTS.share);
 place(btnGarage, UI_RECTS.garage, 4);
+place(btnRoute, UI_RECTS.route, 4);
 
 window.addEventListener('resize', layout);
 window.visualViewport?.addEventListener('resize', layout);
@@ -206,6 +218,17 @@ function renderGarage(): void {
 }
 renderGarage();
 
+btnRoute.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const r = nextRoute(game.route);
+  if (!game.setRoute(r)) return;
+  route = r;
+  saveRoute(r);
+  applyRoute(r);
+  btnRoute.setAttribute('aria-label', `Route: ${ROUTES[r].name}. Tap to change.`);
+});
+btnRoute.setAttribute('aria-label', `Route: ${ROUTES[route].name}. Tap to change.`);
+
 btnGarage.addEventListener('click', (e) => {
   e.stopPropagation();
   if (game.openGarage()) syncUi();
@@ -265,6 +288,7 @@ function syncUi(): void {
   btnShare.hidden = !over;
   btnMute.hidden = game.phase === 'crashed';
   btnGarage.hidden = game.phase !== 'title';
+  btnRoute.hidden = game.phase !== 'title';
   garagePanel.hidden = game.phase !== 'garage';
   if (over) btnShare.href = whatsappUrl(game.world.score);
   document.body.dataset.phase = game.phase;
@@ -315,6 +339,7 @@ const hook: Record<string, unknown> = {
     muted: audio.muted,
     debug: debug.on,
     style: { ...busStyle },
+    route: game.route,
     chillies: game.world.charm.chillies,
     boosting: game.world.charm.boostT > 0,
     invincible: game.world.invincible,

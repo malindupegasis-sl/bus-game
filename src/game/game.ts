@@ -1,4 +1,5 @@
 import { loadHighScore, saveHighScore } from './score';
+import { DEFAULT_ROUTE, type RouteId } from './routes';
 import { World } from './world';
 
 export type Phase = 'title' | 'garage' | 'playing' | 'paused' | 'crashed' | 'over';
@@ -21,14 +22,26 @@ export class Game {
   /** Seconds since the phase last changed (blinking text, delays). */
   phaseTime = 0;
 
-  constructor(highScore = loadHighScore(), seed?: number) {
-    this.highScore = highScore;
+  /** The route being driven. Only changes the scenery, the sign number and which high score counts. */
+  route: RouteId;
+
+  constructor(highScore?: number, seed?: number, route: RouteId = DEFAULT_ROUTE) {
+    this.route = route;
+    this.highScore = highScore ?? loadHighScore(undefined, route);
     this.world = new World(seed);
   }
 
   private setPhase(p: Phase): void {
     this.phase = p;
     this.phaseTime = 0;
+  }
+
+  /** Pick the route on the start screen; shows that route's high score. */
+  setRoute(route: RouteId): boolean {
+    if (this.phase !== 'title') return false;
+    this.route = route;
+    this.highScore = loadHighScore(undefined, route);
+    return true;
   }
 
   /** Garage (bus customisation): only from the title screen. */
@@ -113,7 +126,7 @@ export class Game {
       this.world.step(dt);
       if (this.world.crashed) {
         const prev = this.highScore;
-        this.highScore = saveHighScore(this.world.score);
+        this.highScore = saveHighScore(this.world.score, undefined, this.route);
         this.newBest = this.highScore > prev;
         this.setPhase('crashed');
       }

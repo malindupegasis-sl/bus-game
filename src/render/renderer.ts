@@ -8,13 +8,14 @@ import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, 
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
 import { COLOURS, DEFAULT_STYLE, SIGNS, effectiveLook, type BusStyle } from '../game/garage';
+import type { Theme } from '../game/routes';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
 import { HUD, UI_RECTS, type Rect } from '../ui-layout';
 import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
-  BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font,
+  BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, SCENE, SPRITES, type Font,
   type SpriteName,
 } from './sprites';
 
@@ -125,8 +126,9 @@ export class Renderer {
     return this.pixelMap(SPRITES[name], { ...PALETTE, ...BUS_SKINS[skin] }, key);
   }
 
-  /** Route number shown on the sign board of your bus and of rival buses. */
+  /** Route number shown on the sign board of your bus and of rival buses, and the title button label. */
   route = '138';
+  routeButton = 'ROUTE 138 CITY';
 
   private palette(skin: keyof typeof BUS_SKINS, glow: number): Record<string, string | undefined> {
     const key = `${skin}:${glow}`;
@@ -357,76 +359,180 @@ export class Renderer {
     if (x + img.width < VIEW_W) this.ctx.drawImage(img, Math.round(x + img.width), y);
   }
 
-  private scene(d: number): void {
-    const T = ROAD_TOP; // 9px strip above the road
-    // Sky and distant hills (periodic in 512px so it can be pre-rendered and tiled)
-    const hills = this.layer('hills', 512, T, (g) => {
-      this.rect(0, 0, 512, T, SCENE.sky, g);
-      for (let x = 0; x < 512; x++) {
-        const h = Math.round(2 + 1.5 * Math.sin((2 * Math.PI * 4 * x) / 512) + Math.sin((2 * Math.PI * 11 * x) / 512));
-        this.rect(x, T - 3 - h, 1, h, Math.floor(x / 2) % 9 === 0 ? SCENE.hillDark : SCENE.hill, g);
-      }
-    });
-    this.strip(hills, 512, d * 0.08, 0);
-    // Palm tops peeking over the strip (parallax, behind the road)
-    const palm = this.pixelMap(PALM, PALM_PALETTE, 'palm');
-    this.repeat(d * 0.6, 61, (x, i) => this.ctx.drawImage(palm, x, T - 11 + ((i * 7) % 2)));
-    // Grass + red-earth shoulder
-    const verge = this.layer('vergeTop', 256 + 23, 4, (g) => {
-      this.rect(0, 0, 256 + 23, 2, SCENE.grass, g);
-      this.rect(0, 2, 256 + 23, 2, SCENE.dirt, g);
-      for (let x = 0; x < 256 + 23; x += 23) this.rect(x, 3, 2, 1, SCENE.dirtDark, g);
-    });
-    this.strip(verge, 23, d, T - 4);
+  /** Scenery theme for the current route: Colombo city streets, or the hills to Kandy. */
+  theme: Theme = 'city';
 
-    // Road: asphalt with speckles and yellow edge lines (one 256px tile), then lane dashes.
-    const road = this.layer('road', 256, ROAD_BOTTOM - ROAD_TOP, (g) => {
-      const H = ROAD_BOTTOM - ROAD_TOP;
-      this.rect(0, 0, 256, H, SCENE.asphalt, g);
-      for (let i = 0; i < 70; i++) {
-        const x = (i * 97 + ((i * i * 31) % 53)) % 256;
-        const y = 2 + ((i * 53 + 7) % (H - 4));
-        this.rect(x, y, 2, 1, SCENE.asphaltDark, g);
-      }
-      this.rect(0, 0, 256, 1, SCENE.edge, g);
-      this.rect(0, H - 1, 256, 1, SCENE.edge, g);
-    });
-    this.strip(road, 256, d, ROAD_TOP);
+  private scene(d: number): void {
+    if (this.theme === 'city') this.sceneCity(d);
+    else this.sceneHills(d);
+    // Lane dashes are the same on every route.
     const dashes = this.layer('dashes', 256 + 24, ROAD_BOTTOM - ROAD_TOP, (g) => {
       for (let l = 1; l < LANE_CENTER_Y.length; l++) {
         for (let x = 0; x < 256 + 24; x += 24) this.rect(x, l * LANE_HEIGHT - 1, 12, 2, SCENE.line, g);
       }
     });
     this.strip(dashes, 24, d, ROAD_TOP);
-
-    // Bottom verge: red-earth shoulder (moves with the road), grass and bushes (slight parallax).
-    const B = ROAD_BOTTOM;
-    const shoulder = this.layer('vergeBottom', 256 + 19, 3, (g) => {
-      this.rect(0, 0, 256 + 19, 3, SCENE.dirt, g);
-      for (let x = 0; x < 256 + 19; x += 19) this.rect(x, 1, 2, 1, SCENE.dirtDark, g);
-    });
-    this.strip(shoulder, 19, d, B);
-    const grassH = HUD_TOP - B - 3;
-    const bushes = this.layer('bushes', 256 + 111, grassH, (g) => {
-      this.rect(0, 0, 256 + 111, grassH, SCENE.grass, g);
-      for (let i = 0; i * 37 < 256 + 111; i++) {
-        const bx = i * 37;
-        const w = 6 + (i % 3) * 2;
-        this.rect(bx, grassH - 3, w, 3, SCENE.bushDark, g);
-        this.rect(bx + 1, grassH - 5, w - 2, 3, SCENE.bush, g);
-      }
-    });
-    this.strip(bushes, 111, d * 1.15, B + 3);
   }
 
-  /** Call fn for each repeat of a pattern with the given spacing, scrolled by `offset`. */
-  private repeat(offset: number, spacing: number, fn: (x: number, index: number) => void): void {
-    const first = Math.floor(offset / spacing);
-    for (let i = first - 1; ; i++) {
-      const x = i * spacing - offset;
-      if (x > VIEW_W) break;
-      fn(Math.round(x), i);
-    }
+  /** Asphalt tile with speckles and edge lines; `extra` paints route-specific details. */
+  private roadTile(key: string, base: string, dark: string, edge: string, extra: (g: CanvasRenderingContext2D, h: number) => void) {
+    return this.layer(key, 256, ROAD_BOTTOM - ROAD_TOP, (g) => {
+      const H = ROAD_BOTTOM - ROAD_TOP;
+      this.rect(0, 0, 256, H, base, g);
+      for (let i = 0; i < 70; i++) {
+        const x = (i * 97 + ((i * i * 31) % 53)) % 256;
+        const y = 2 + ((i * 53 + 7) % (H - 4));
+        this.rect(x, y, 2, 1, dark, g);
+      }
+      extra(g, H);
+      this.rect(0, 0, 256, 1, edge, g);
+      this.rect(0, H - 1, 256, 1, edge, g);
+    });
+  }
+
+  // ---- Route 138: Colombo city -------------------------------------------------------------
+
+  private sceneCity(d: number): void {
+    const T = ROAD_TOP; // 9px strip above the road
+    // Shophouse skyline (parallax): coloured facades, windows, signboards, striped awnings.
+    const skyline = this.layer('cityTop', 512, T, (g) => {
+      this.rect(0, 0, 512, T, '#a8dcf8', g);
+      const facades = ['#f8d878', '#f89070', '#78d8b8', '#e8e8e8', '#f8a8d0', '#a8c8f8', '#d8b088'];
+      let x = 0;
+      let i = 0;
+      while (x < 512) {
+        const w = 10 + ((i * 7) % 13);
+        const top = (i * 5) % 4; // 0..3
+        const col = facades[(i * 3) % facades.length];
+        this.rect(x, top, w - 1, 7 - top, col, g);
+        for (let wy = top + 1; wy < 4; wy += 2) for (let wx = x + 2; wx < x + w - 2; wx += 3) this.rect(wx, wy, 1, 1, '#405060', g);
+        if (i % 2 === 0) this.rect(x + 1, 4, Math.min(8, w - 3), 1, ['#d82800', '#0058f8', '#00a844', '#f8b800'][(i / 2) % 4 | 0], g);
+        for (let ax = x; ax < x + w - 1; ax++) this.rect(ax, 5, 1, 2, ax % 2 ? '#fcfcfc' : ['#d82800', '#0058f8', '#00a844'][i % 3], g);
+        x += w;
+        i++;
+      }
+    });
+    this.strip(skyline, 512, d * 0.5, 0);
+    // Footpath and black-and-white painted kerb, moving with the road.
+    const kerb = this.layer('cityKerbTop', 256 + 8, 2, (g) => {
+      this.rect(0, 0, 256 + 8, 1, '#b4b4b4', g);
+      for (let x = 0; x < 256 + 8; x += 8) {
+        this.rect(x, 1, 4, 1, '#101010', g);
+        this.rect(x + 4, 1, 4, 1, '#f0f0f0', g);
+      }
+    });
+    this.strip(kerb, 8, d, T - 2);
+
+    // Darker city road with manhole covers, and the odd zebra crossing.
+    const road = this.roadTile('roadCity', '#4e4e54', '#3e3e44', '#e8e8e8', (g) => {
+      for (const [x, lane] of [[60, 0], [190, 2], [120, 1]]) {
+        const cy = lane * LANE_HEIGHT + 22;
+        this.rect(x, cy, 6, 2, '#2c2c30', g);
+        this.rect(x + 1, cy - 1, 4, 1, '#2c2c30', g);
+        this.rect(x + 1, cy + 2, 4, 1, '#2c2c30', g);
+        this.rect(x + 1, cy, 4, 1, '#58585e', g);
+      }
+    });
+    this.strip(road, 256, d, ROAD_TOP);
+    const zebra = this.layer('zebra', 768, ROAD_BOTTOM - ROAD_TOP, (g) => {
+      for (let y = 3; y < ROAD_BOTTOM - ROAD_TOP - 3; y += 6) this.rect(300, y, 16, 3, '#7c7c84', g); // subtle, so it never competes with traffic
+    });
+    this.strip(zebra, 768, d, ROAD_TOP);
+
+    // Bottom: kerb, paved footpath with bollards, and the edge of shop awnings.
+    const B = ROAD_BOTTOM;
+    const H = HUD_TOP - B;
+    const bottom = this.layer('cityBottom', 256 + 120, H, (g) => {
+      for (let x = 0; x < 256 + 120; x += 8) {
+        this.rect(x, 0, 4, 1, '#101010', g);
+        this.rect(x + 4, 0, 4, 1, '#f0f0f0', g);
+      }
+      this.rect(0, 1, 256 + 120, 4, '#bcbcbc', g);
+      for (let x = 0; x < 256 + 120; x += 6) this.rect(x, 1, 1, 4, '#a4a4a4', g);
+      this.rect(0, 3, 256 + 120, 1, '#a4a4a4', g);
+      for (let x = 10; x < 256 + 120; x += 40) {
+        this.rect(x, 1, 2, 3, '#f8d800', g);
+        this.rect(x, 2, 2, 1, '#101010', g);
+      }
+      const awn = ['#d82800', '#0058f8', '#00a844', '#f8b800', '#a838c8'];
+      for (let x = 0; x < 256 + 120; x++) {
+        const shop = Math.floor(x / 24);
+        const col = awn[shop % awn.length];
+        this.rect(x, 5, 1, H - 5, shop % 2 && x % 2 ? '#fcfcfc' : col, g);
+      }
+    });
+    this.strip(bottom, 120, d, B);
+  }
+
+  // ---- Route 1: Colombo to Kandy (hills) ---------------------------------------------------
+
+  private sceneHills(d: number): void {
+    const T = ROAD_TOP;
+    // Far blue-green ridges, then nearer green hills with a road winding over them, and trees.
+    const far = this.layer('hillsFar', 512, T, (g) => {
+      this.rect(0, 0, 512, T, '#5cc8f8', g);
+      for (let x = 0; x < 512; x++) {
+        const h = Math.round(5 + 2 * Math.sin((2 * Math.PI * 3 * x) / 512) + Math.sin((2 * Math.PI * 13 * x) / 512));
+        this.rect(x, T - h, 1, h, '#4c9c8c', g);
+      }
+    });
+    this.strip(far, 512, d * 0.12, 0);
+    const near = this.layer('hillsNear', 512, T, (g) => {
+      for (let x = 0; x < 512; x++) {
+        const h = Math.max(1, Math.round(3 + 2 * Math.sin((2 * Math.PI * 5 * x) / 512 + 1) + Math.sin((2 * Math.PI * 17 * x) / 512)));
+        this.rect(x, T - h, 1, h, x % 7 < 2 ? '#138a3c' : '#1ca048', g);
+        // A road winding up the slopes (the bends of the hill country).
+        if (h >= 4 && Math.floor(x / 40) % 2 === 0) {
+          const ry = T - h + 1 + Math.round(1.2 * Math.sin(x / 6));
+          if (ry < T - 1) this.rect(x, ry, 1, 1, '#e0cfa0', g);
+        }
+        if (x % 23 === 0 && h >= 3) {
+          this.rect(x, T - h - 2, 3, 2, '#0c6c2c', g);
+          this.rect(x + 1, T - h - 3, 1, 1, '#0c6c2c', g);
+        }
+      }
+    });
+    this.strip(near, 512, d * 0.35, 0);
+    const verge = this.layer('hillsVergeTop', 256 + 23, 2, (g) => {
+      this.rect(0, 0, 256 + 23, 2, SCENE.dirt, g);
+      for (let x = 0; x < 256 + 23; x += 23) this.rect(x, 1, 2, 1, SCENE.dirtDark, g);
+    });
+    this.strip(verge, 23, d, T - 2);
+
+    // Older hill road: lighter asphalt with patches and cracks.
+    const road = this.roadTile('roadHills', '#6a6a6a', '#5a5a5a', SCENE.edge, (g) => {
+      for (const [x, y, w, h] of [[30, 6, 12, 5], [140, 40, 9, 6], [210, 72, 14, 4], [90, 80, 8, 5]]) this.rect(x, y, w, h, '#5c5c5c', g);
+      for (const [x, y] of [[70, 20], [170, 60], [240, 30]]) {
+        for (let i = 0; i < 6; i++) this.rect(x + i, y + ((i * 3) % 4) - 1, 1, 1, '#4c4c4c', g);
+      }
+    });
+    this.strip(road, 256, d, ROAD_TOP);
+
+    // Bottom: red-earth shoulder, rows of tea bushes, bend warning signs and milestones.
+    const B = ROAD_BOTTOM;
+    const H = HUD_TOP - B;
+    const bottom = this.layer('hillsBottom', 256 + 111, H, (g) => {
+      this.rect(0, 0, 256 + 111, 2, SCENE.dirt, g);
+      for (let x = 0; x < 256 + 111; x += 19) this.rect(x, 1, 2, 1, SCENE.dirtDark, g);
+      this.rect(0, 2, 256 + 111, H - 2, '#006c28', g);
+      for (let x = 0; x < 256 + 111; x += 8) {
+        this.rect(x + 1, 3, 6, H - 3, '#00a844', g);
+        this.rect(x + 2, 2, 4, 1, '#00a844', g);
+        this.rect(x + 2, 3, 3, 1, '#58d878', g);
+      }
+      for (let x = 50; x < 256 + 111; x += 111) {
+        // Bend warning sign: yellow diamond with a black curve, on a grey post.
+        this.rect(x + 2, 4, 1, H - 4, '#9c9c9c', g);
+        const diamond = ['..y..', '.yKy.', 'yK.yy', '.yKy.', '..y..'];
+        diamond.forEach((row, dy) => [...row].forEach((c, dx) => c !== '.' && this.rect(x + dx, dy, 1, 1, c === 'y' ? '#f8d800' : '#101010', g)));
+      }
+      for (let x = 92; x < 256 + 111; x += 111) {
+        // Milestone: white post with a red cap.
+        this.rect(x, 2, 3, 1, '#d82800', g);
+        this.rect(x, 3, 3, H - 3, '#f0f0f0', g);
+      }
+    });
+    this.strip(bottom, 111, d, B);
   }
 
   private drawList: { y: number; o: Obstacle | null; lane: number }[] = [];
@@ -1078,7 +1184,7 @@ export class Renderer {
         const [l1, l2] = splitTitle(GAME_TITLE);
         this.title(l1, 5, 3);
         this.title(l2, 29, 3);
-        this.text(`HIGH SCORE ${formatScore(game.highScore)}`, mid, 55, SCENE.text, 1, 'center');
+        this.text(`BEST ON ROUTE ${this.route}: ${formatScore(game.highScore)}`, mid, 55, SCENE.text, 1, 'center');
         if (blink) this.text('TAP TO START', mid, 65, SCENE.text, 2, 'center');
         this.text(
           this.touchHint ? 'SWIPE OR TAP THE ARROWS TO CHANGE LANE' : 'UP/DOWN ARROWS OR W/S TO CHANGE LANE',
@@ -1086,6 +1192,7 @@ export class Renderer {
         );
         this.text(MUSIC_CREDIT, mid, 98, PALETTE.V, 1, 'center');
         this.button(UI_RECTS.garage, 'GARAGE', '#7a1aa8', 1, true);
+        this.button(UI_RECTS.route, this.routeButton, '#0058f8', 1, true);
         break;
       }
       case 'garage': {
@@ -1115,7 +1222,7 @@ export class Renderer {
         this.dim();
         this.title('GAME OVER', 7, 3);
         this.text(`SCORE ${formatScore(game.world.score)}`, mid, 34, SCENE.text, 2, 'center');
-        this.text(`HIGH SCORE ${formatScore(game.highScore)}`, mid, 51, SCENE.text, 1, 'center');
+        this.text(`BEST ON ROUTE ${this.route}: ${formatScore(game.highScore)}`, mid, 51, SCENE.text, 1, 'center');
         if (game.newBest && blink) this.text('NEW BEST!', mid, 62, PALETTE.y, 1, 'center');
         const ok = game.canRetry();
         this.button(UI_RECTS.retry, 'RETRY', '#e45c10', 2, ok);

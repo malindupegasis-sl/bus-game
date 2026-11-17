@@ -9,6 +9,8 @@ export const UI_RECTS = {
   mute: { x: 236, y: 3, w: 17, h: 13 },
   /** Title screen: opens the garage. */
   garage: { x: 192, y: 49, w: 56, h: 15 },
+  /** Title screen: switches route (138 city / 1 Kandy). */
+  route: { x: 6, y: 49, w: 66, h: 15 },
 } satisfies Record<string, Rect>;
 
 
