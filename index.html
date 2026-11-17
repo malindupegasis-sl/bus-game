@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#c41c00" />
+    <meta name="description" content="Dodge oncoming traffic in a Sri Lankan bus. An 8-bit browser game." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Bus Game" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <title>Bus Game</title>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="pad-up" class="pad" aria-hidden="true">
+        <svg viewBox="0 0 9 5"><path fill="#f8b800" d="M4 0h1v1h1v1h1v1h1v1h1v1H0V4h1V3h1V2h1V1h1z" /></svg>
+      </div>
+      <div id="wrap">
+        <canvas id="screen" aria-label="Bus Game"></canvas>
+        <button id="btn-mute" class="hit" type="button" aria-label="Mute" aria-pressed="false">Mute</button>
+        <button id="btn-retry" class="hit" type="button" hidden>Retry</button>
+        <a id="btn-share" class="hit" target="_blank" rel="noopener" hidden>Share on WhatsApp</a>
+      </div>
+      <div id="pad-down" class="pad" aria-hidden="true">
+        <svg viewBox="0 0 9 5"><path fill="#f8b800" d="M0 0h9v1H8v1H7v1H6v1H5v1H4V4H3V3H2V2H1V1H0z" /></svg>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
