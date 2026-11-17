@@ -78,7 +78,9 @@ Reference images are style-only: never copy them or commit them.
 - [x] 1.17 Chilli and lime pickups 2.5x bigger (25x30, 25x25), inside the lane; fairness rule kept; HUD icon unchanged
 - [x] 1.18 Pickup feedback: white flash + gold glint across the bus, sparkle burst off the pickup, "+CHILLI!"/"+LIME!" popup; all under 1 s; popups sit above (or below) the bus, never on the road ahead
 - [x] 1.19 Charm moved under the front bumper, in proportion to the bus; grows 1 chilli -> 2 chillies -> full with lime (boost); sways (more on lane changes); not part of the hitbox
-- [ ] 1.20 Deployed and checked live -> STOP for the owner to test before Stage 2
+- [x] 1.20 Deployed and checked live (a3cd97b): 86 unit tests; portrait + landscape at 390px; live run
+  with music throughout, no errors; 2.5x chilli seen live; 11 s chipmunk boost verified in the dev build.
+- **Waiting for the owner to test these fixes on the iPhone before starting Stage 2.**
 
 ## Stage 2: bus customisation
 - [ ] 2.1 Garage screen from the start menu: bus colours
