@@ -17,12 +17,22 @@ Reference images are style-only: never copy them or commit them.
 - Lucky charm: saves one crash from the 2nd chilli until the boost ends; 1.5 s blinking invincibility; collecting restarts from zero.
 
 ## Stage 0: iPhone fixes (before anything new)
-- [ ] 0.1 Investigate and fix lag from the tuk-tuk swerve and speech bubble (per-frame text drawing/measuring, 2x portrait text, per-frame allocations); cache the bubble as an image if it helps
-- [ ] 0.2 Bubbles about half their current size, still readable (drop the 2x portrait scaling)
-- [ ] 0.3 Music stopping ~10 s in on iPhone: find the cause (main-thread stalls, AudioContext suspended/interrupted, memory); stream with an audio element if needed; recover automatically after an iOS interruption
-- [ ] 0.4 General performance: cap device pixel ratio, draw at internal resolution and scale once, clean up particles/puffs/bubbles off screen, smooth rendering between fixed 60 Hz updates (120 Hz screens)
-- [ ] 0.5 Debug overlay toggled by tapping the score 5 times: FPS and music status
+- [x] 0.1 Investigate and fix lag from the tuk-tuk swerve and speech bubble (per-frame text drawing/measuring, 2x portrait text, per-frame allocations); cache the bubble as an image if it helps
+- [x] 0.2 Bubbles about half their current size, still readable (drop the 2x portrait scaling)
+- [x] 0.3 Music stopping ~10 s in on iPhone: find the cause (main-thread stalls, AudioContext suspended/interrupted, memory); stream with an audio element if needed; recover automatically after an iOS interruption
+- [x] 0.4 General performance: cap device pixel ratio, draw at internal resolution and scale once, clean up particles/puffs/bubbles off screen, smooth rendering between fixed 60 Hz updates (120 Hz screens)
+- [x] 0.5 Debug overlay toggled by tapping the score 5 times: FPS and music status
 - [ ] 0.6 Stage 0 tests pass, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+
+### Stage 0 notes
+- Draw calls per frame (traffic + a bubble): fillRect 1013 -> 5, fillStyle changes 807 -> 5, drawImage 82 -> 33.
+  Static scenery, road, HUD, text, wheels, LCD digits and bubbles are pre-rendered once and blitted.
+- Bubbles: 5x7 text at normal size everywhere (the 2x portrait text is gone); each phrase is a cached image.
+- Music: one streamed <audio> element (no Web Audio routing, nothing decoded into memory); loops by seeking;
+  playbackRate stepped (not set every frame); watchdog restarts a paused/stuck song and resumes an
+  interrupted AudioContext. The previous build never decoded the song into an AudioBuffer.
+- Fixed 60 Hz simulation with render interpolation; canvas stays 256x144 (DPR only picks the CSS scale).
+- Debug overlay: tap the HUD score 5 times (remembered on the device).
 
 ## Stage 1: gameplay
 - [ ] 1.1 Lime-and-chilli boost: chilli pickups; 2 chillies hang a charm on the back of the bus; lime appears only after 2 chillies; lime completes the charm and starts the boost

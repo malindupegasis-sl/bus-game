@@ -12,6 +12,8 @@ export type WorldEvent = { type: 'lane' } | { type: 'crash'; obstacle: Obstacle 
 export class World {
   t = 0;
   d = 0;
+  /** Distance at the previous fixed update (the renderer interpolates between the two). */
+  prevD = 0;
   speed = speedAt(0);
   /** Multiplier hook for future boosts (conductor shout → party bus). */
   speedBoost = 1;
@@ -50,6 +52,8 @@ export class World {
   }
 
   step(dt: number): void {
+    this.prevD = this.d;
+    this.bus.prevPos = this.bus.pos;
     if (this.crashed) return;
     this.t += dt;
     this.speed = speedAt(this.t) * this.speedBoost;

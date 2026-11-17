@@ -5,8 +5,8 @@ export interface InputHandlers {
   press(dir: Dir): void;
   /** Vertical swipe anywhere outside the buttons. */
   swipe(dir: Dir): void;
-  /** Tap anywhere outside the buttons (start / resume, never steers). */
-  tap(): void;
+  /** Tap anywhere outside the buttons (start / resume, never steers). Client coordinates. */
+  tap(x: number, y: number): void;
   /** Enter / Space. */
   primary(): void;
   toggleMute(): void;
@@ -44,7 +44,7 @@ export function attachInput(h: InputHandlers, buttons: { el: HTMLElement; dir: D
       e.preventDefault();
       active.set(e.pointerId, { x: e.clientX, y: e.clientY, swiped: false });
       h.unlock();
-      h.tap();
+      h.tap(e.clientX, e.clientY);
     },
     { passive: false },
   );

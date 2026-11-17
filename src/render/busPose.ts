@@ -124,17 +124,62 @@ export function busWheels(p: BusPose, busX: number): { x: number; y: number }[] 
   return BUS_WHEELS.xs.map((wx) => ({ x: Math.round(left(p, busX, wx + 0.5) - 0.5), y: p.wheelY + tiltAt(p, wx) }));
 }
 
-/** Bounding box of everything the bus draws in this pose. */
+/**
+ * Bounding box of everything the bus draws in this pose. Computed directly (no allocation): the
+ * tilt is linear from the rear (0) to the nose (tilt), so its extremes are at the two ends.
+ */
 export function busExtent(p: BusPose, busX: number): { top: number; bottom: number; left: number; right: number } {
-  const cols = busColumns(p, busX);
-  const wheels = busWheels(p, busX);
+  const dh = Math.round(BUS_BODY_H * p.scaleY);
   const r = BUS_WHEELS.r;
+  let wheelBottom = -Infinity;
+  let wheelLeft = Infinity;
+  let wheelRight = -Infinity;
+  for (const wx of BUS_WHEELS.xs) {
+    const cx = Math.round(left(p, busX, wx + 0.5) - 0.5);
+    wheelBottom = Math.max(wheelBottom, p.wheelY + tiltAt(p, wx) + r);
+    wheelLeft = Math.min(wheelLeft, cx - r);
+    wheelRight = Math.max(wheelRight, cx + r);
+  }
   return {
-    top: Math.min(...cols.map((c) => c.dy)),
-    bottom: Math.max(...cols.map((c) => c.dy + c.dh - 1), ...wheels.map((w) => w.y + r)),
-    left: Math.min(...cols.map((c) => c.dx), ...wheels.map((w) => w.x - r)),
-    right: Math.max(...cols.map((c) => c.dx + c.dw - 1), ...wheels.map((w) => w.x + r)),
+    top: p.bodyBottom - dh + 1 + p.bounce + Math.min(0, p.tilt),
+    bottom: Math.max(p.bodyBottom + p.bounce + Math.max(0, p.tilt), wheelBottom),
+    left: Math.min(Math.round(left(p, busX, 0)), wheelLeft),
+    right: Math.max(Math.round(left(p, busX, BUS_W)) - 1, wheelRight),
   };
+}
+
+export interface Group {
+  sx: number;
+  sw: number;
+  dx: number;
+  dw: number;
+  dy: number;
+  dh: number;
+}
+
+const groups: Group[] = Array.from({ length: TILT_MAX * 2 + 2 }, () => ({ sx: 0, sw: 0, dx: 0, dw: 0, dy: 0, dh: 0 }));
+
+/**
+ * The body as a few runs of columns that share a vertical offset (one run when level), each drawn
+ * with a single scaled drawImage. Returns a reused array: don't keep it across frames.
+ */
+export function busGroups(p: BusPose, busX: number): Group[] {
+  const dh = Math.round(BUS_BODY_H * p.scaleY);
+  const base = p.bodyBottom - dh + 1 + p.bounce;
+  let n = 0;
+  let start = 0;
+  for (let x = 1; x <= BUS_W; x++) {
+    if (x < BUS_W && tiltAt(p, x) === tiltAt(p, start)) continue;
+    const g = groups[n++];
+    g.sx = start;
+    g.sw = x - start;
+    g.dx = Math.round(left(p, busX, start));
+    g.dw = Math.round(left(p, busX, x)) - g.dx;
+    g.dy = base + tiltAt(p, start);
+    g.dh = dh;
+    start = x;
+  }
+  return groups.slice(0, n).filter((g) => g.dw > 0);
 }
 
 export const LANE_BAND = { up: LANE_HALF_UP, down: LANE_HALF_DOWN } as const;

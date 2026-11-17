@@ -1,12 +1,13 @@
 import './style.css';
 import { AudioManager } from './audio/audio';
-import { VIEW_H, VIEW_W } from './config';
+import { HUD_TOP, VIEW_H, VIEW_W } from './config';
 import { musicRateForSpeed } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
 import { Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
+import { DebugOverlay } from './debug';
 import { UI_RECTS, type Rect } from './ui-layout';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -46,7 +47,6 @@ function layout(): void {
   setBox(btnUp, l.up);
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
-  renderer.pixelScale = l.canvas.w / VIEW_W;
 }
 
 function place(el: HTMLElement, r: Rect, grow = 0): void {
@@ -62,6 +62,31 @@ place(btnShare, UI_RECTS.share);
 window.addEventListener('resize', layout);
 window.visualViewport?.addEventListener('resize', layout);
 layout();
+
+// ------------------------------------------------------------ debug overlay
+
+/** The HUD score box, in logical px (tap it 5 times to toggle the overlay). */
+const SCORE_BOX = { x: 4, y: HUD_TOP + 1, w: 72, h: VIEW_H - HUD_TOP - 1 };
+
+function isOnScore(clientX: number, clientY: number): boolean {
+  const r = canvas.getBoundingClientRect();
+  const x = ((clientX - r.left) / r.width) * VIEW_W;
+  const y = ((clientY - r.top) / r.height) * VIEW_H;
+  return x >= SCORE_BOX.x && x <= SCORE_BOX.x + SCORE_BOX.w && y >= SCORE_BOX.y && y <= SCORE_BOX.y + SCORE_BOX.h;
+}
+
+const debug = new DebugOverlay(() => {
+  const s = audio.songState;
+  const music = audio.source === 'song' && s
+    ? `MUSIC song ${s.playing ? 'playing' : 'PAUSED'} ${s.time.toFixed(1)}s x${s.rate.toFixed(2)}${s.pitchKept ? '' : ' chipmunk'}`
+    : `MUSIC ${audio.source}`;
+  return [
+    music,
+    `AUDIO CTX ${audio.contextState}  recoveries ${audio.restarts}`,
+    `LAST ${audio.lastEvent}`,
+    `RUN ${game.phase} t=${game.world.t.toFixed(1)}s  vehicles ${game.world.obstacles.length}  particles ${renderer.particleCount}`,
+  ];
+});
 
 // ------------------------------------------------------------ input + audio
 
@@ -99,7 +124,8 @@ attachInput(
       game.swipe(dir);
       flushEvents();
     },
-    tap() {
+    tap(x, y) {
+      if (isOnScore(x, y)) debug.tap(performance.now());
       const r = game.tap();
       if (r === 'start') onRunStart();
       else if (r === 'resume') audio.resumeAll();
@@ -148,7 +174,10 @@ window.addEventListener('pagehide', () => {
 
 // ------------------------------------------------------------ main loop
 
-const STEP = 1 / 120;
+/** Fixed simulation step: 60 Hz. Rendering interpolates between steps (smooth on 120 Hz screens). */
+const STEP = 1 / 60;
+/** Never run more than this many catch-up steps in one frame (avoids a spiral after a stall). */
+const MAX_STEPS = 5;
 let last = performance.now();
 let acc = 0;
 let lastPhase: Phase | null = null;
@@ -166,17 +195,23 @@ function frame(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   acc += dt;
-  while (acc >= STEP) {
+  let steps = 0;
+  while (acc >= STEP && steps < MAX_STEPS) {
     game.update(STEP);
     acc -= STEP;
+    steps++;
   }
+  if (steps === MAX_STEPS) acc = 0;
   flushEvents();
   if (game.phase === 'playing') audio.setRate(musicRateForSpeed(game.world.speed));
   if (game.phase !== lastPhase || game.phase === 'over') {
     lastPhase = game.phase;
     syncUi();
   }
-  renderer.draw(game, now / 1000);
+  audio.tick(now);
+  const alpha = game.phase === 'playing' ? Math.min(1, acc / STEP) : 1;
+  renderer.draw(game, now / 1000, alpha);
+  debug.frame(now);
   requestAnimationFrame(frame);
 }
 syncUi();
@@ -198,6 +233,10 @@ const hook: Record<string, unknown> = {
     audio: audio.source,
     song: audio.songState,
     muted: audio.muted,
+    debug: debug.on,
+    fps: debug.fps,
+    audioCtx: audio.contextState,
+    recoveries: audio.restarts,
   }),
 };
 if (import.meta.env.DEV) Object.assign(hook, { game, audio });

@@ -102,3 +102,21 @@ body[data-phase='crashed'] .ctrl {
     display: none;
   }
 }
+
+/* Debug overlay (tap the score 5 times) */
+#debug {
+  position: fixed;
+  left: calc(env(safe-area-inset-left) + 4px);
+  top: calc(env(safe-area-inset-top) + 4px);
+  z-index: 10;
+  margin: 0;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #7cfc7c;
+  font: 11px/1.35 ui-monospace, Menlo, monospace;
+  pointer-events: none;
+  white-space: pre;
+}
+#debug[hidden] {
+  display: none;
+}

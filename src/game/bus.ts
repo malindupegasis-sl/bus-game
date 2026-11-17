@@ -8,6 +8,8 @@ export class Bus {
   target = 1;
   /** Current (fractional) lane position. */
   pos = 1;
+  /** Position at the previous fixed update (for render interpolation). */
+  prevPos = 1;
   private from = 1;
   private progress = 1;
   private duration = LANE_CHANGE_TIME;

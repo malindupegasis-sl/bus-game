@@ -1,8 +1,13 @@
 import { MAX_MUSIC_RATE, SONG_LOOP } from '../config';
 import { BASS, BPM, DRUMS, LEAD, midiToFreq, noteLength, noteToMidi } from './music';
+import { musicAction, STUCK_PLAY_AFTER } from './musicHealth';
 
 const MUTE_KEY = 'busgame.muted';
 const SONG_URL = `${import.meta.env.BASE_URL}audio/song.mp3`;
+/** How often the watchdog checks the music (ms). */
+const WATCH_EVERY = 250;
+/** Only change the song's playbackRate in steps this big, at most every WATCH_EVERY ms. */
+const RATE_STEP = 0.01;
 
 function loadMuted(): boolean {
   try {
@@ -14,8 +19,12 @@ function loadMuted(): boolean {
 
 /**
  * All game audio. Nothing makes a sound until `unlock()` runs inside a user gesture
- * (mobile browsers require this). If public/audio/song.mp3 exists it is used as the music,
- * otherwise a Web Audio chiptune plays. Either way music speeds up with the game, capped at 1.25x.
+ * (mobile browsers require this).
+ *
+ * Music: public/audio/song.mp3 streams through ONE plain <audio> element (no Web Audio routing,
+ * nothing decoded into memory). It loops between SONG_LOOP points by seeking, speeds up with the
+ * game (capped at 1.25x, pitch preserved), and a watchdog restarts it if iOS pauses or stalls it.
+ * If the file is missing or fails, a Web Audio chiptune plays instead. Sound effects use Web Audio.
  */
 export class AudioManager {
   muted = loadMuted();
@@ -26,14 +35,12 @@ export class AudioManager {
   private noise: AudioBuffer | null = null;
 
   private songAvailable = false;
-  /** Two copies of the song that hand over to each other for a gapless, crossfaded loop. */
-  private songs: { el: HTMLAudioElement; gain: GainNode | null; blessed: boolean }[] = [];
+  private song: HTMLAudioElement | null = null;
+  private usingSong = false;
   /** play() was refused for lack of a user gesture; retry on the next one. */
   private pendingResume = false;
-  private songIdx = 0;
-  private songTimer: number | null = null;
-  private fading = false;
-  private usingSong = false;
+  /** True while the game itself has paused the music (page hidden / paused / stopped). */
+  private heldByGame = true;
 
   private wantMusic = false;
   private playing = false;
@@ -41,6 +48,13 @@ export class AudioManager {
   private step = 0;
   private nextStepTime = 0;
   private timer: number | null = null;
+
+  // Watchdog + debug info
+  private lastWatch = 0;
+  private lastSongTime = 0;
+  private stuckFor = 0;
+  restarts = 0;
+  lastEvent = 'none';
 
   constructor() {
     void this.probeSong();
@@ -61,6 +75,10 @@ export class AudioManager {
     return !this.playing ? 'none' : this.usingSong ? 'song' : 'chiptune';
   }
 
+  private note(e: string): void {
+    this.lastEvent = e;
+  }
+
   /** Call from every user-gesture handler. Cheap after the first time. */
   unlock(): void {
     try {
@@ -77,6 +95,7 @@ export class AudioManager {
         this.musicBus.connect(this.master);
         this.pulse = makePulseWave(ctx, 0.25);
         this.noise = makeNoise(ctx);
+        ctx.onstatechange = () => this.note(`audio context ${ctx.state}`);
         // A silent blip finishes the unlock on older iOS.
         const src = ctx.createBufferSource();
         src.buffer = ctx.createBuffer(1, 1, 22050);
@@ -84,11 +103,10 @@ export class AudioManager {
         src.start(0);
       }
       if (this.ctx.state !== 'running' && document.visibilityState === 'visible') void this.ctx.resume();
-      if (this.songAvailable && this.songs.length === 0) this.createSongs();
-      this.blessSongs();
-      if (this.pendingResume && this.playing && this.usingSong) {
+      if (this.songAvailable && !this.song) this.createSong();
+      if (this.pendingResume && this.playing && this.usingSong && !this.heldByGame) {
         this.pendingResume = false;
-        this.resumeSongs();
+        this.playSong();
       }
       if (this.wantMusic && !this.playing) this.beginMusic();
     } catch {
@@ -106,9 +124,12 @@ export class AudioManager {
   private beginMusic(): void {
     if (!this.ctx) return;
     this.playing = true;
-    if (this.songs.length) {
+    this.heldByGame = false;
+    if (this.song) {
       this.usingSong = true;
-      this.playSongFrom(SONG_LOOP.start);
+      this.song.playbackRate = this.rate;
+      this.song.currentTime = SONG_LOOP.start;
+      this.playSong();
     } else {
       this.usingSong = false;
       this.startSequencer();
@@ -118,14 +139,16 @@ export class AudioManager {
   stopMusic(): void {
     this.wantMusic = false;
     this.playing = false;
+    this.heldByGame = true;
     this.stopSequencer();
-    this.stopSongs();
+    this.song?.pause();
   }
 
   /** Page hidden / game paused. */
   suspend(): void {
+    this.heldByGame = true;
     this.stopSequencer();
-    this.pauseSongs();
+    this.song?.pause();
     void this.ctx?.suspend();
   }
 
@@ -133,13 +156,16 @@ export class AudioManager {
     if (!this.ctx) return;
     void this.ctx.resume();
     if (!this.playing) return;
-    if (this.usingSong) this.resumeSongs();
+    this.heldByGame = false;
+    if (this.usingSong) this.playSong();
     else this.startSequencer();
   }
 
   setRate(r: number): void {
-    this.rate = Math.max(0.5, Math.min(MAX_MUSIC_RATE, r));
-    for (const s of this.songs) if (s.el.playbackRate !== this.rate) s.el.playbackRate = this.rate;
+    const next = Math.max(0.5, Math.min(MAX_MUSIC_RATE, r));
+    // Changing playbackRate re-tunes the pitch-preserving stretcher; doing that every frame can
+    // make iOS stutter, so only step it in small increments (applied by tick()).
+    if (Math.abs(next - this.rate) >= RATE_STEP || (next === MAX_MUSIC_RATE && this.rate !== next)) this.rate = next;
   }
 
   setMuted(m: boolean): void {
@@ -150,74 +176,57 @@ export class AudioManager {
       /* ignore */
     }
     if (this.master && this.ctx) this.master.gain.setValueAtTime(m ? 0 : 0.55, this.ctx.currentTime);
-    if (!this.master) for (const s of this.songs) s.el.muted = m;
+    if (this.song) this.song.muted = m;
   }
 
   // ------------------------------------------------------------ song file
 
-  private createSongs(): void {
-    for (let i = 0; i < 2; i++) {
-      const el = new Audio(SONG_URL);
-      el.preload = 'auto';
-      el.loop = false; // looped by hand between SONG_LOOP points, with a crossfade
-      el.preservesPitch = true;
-      (el as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = true;
-      el.addEventListener('error', () => this.songFailed());
-      let gain: GainNode | null = null;
-      if (this.ctx && this.musicBus) {
-        try {
-          gain = this.ctx.createGain();
-          gain.gain.value = 0;
-          this.ctx.createMediaElementSource(el).connect(gain).connect(this.master!);
-        } catch {
-          gain = null;
-        }
-      }
-      if (!gain) el.muted = this.muted;
-      this.songs.push({ el, gain, blessed: false });
-    }
+  private createSong(): void {
+    const el = new Audio(SONG_URL);
+    el.preload = 'auto';
+    el.loop = false; // looped by hand between SONG_LOOP points (the file has silence at both ends)
+    el.preservesPitch = true;
+    (el as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = true;
+    el.muted = this.muted;
+    el.addEventListener('error', () => this.songFailed());
+    el.addEventListener('pause', () => {
+      if (!this.heldByGame && this.playing && this.usingSong) this.note('song paused by the system');
+    });
+    el.addEventListener('stalled', () => this.note('song stalled (network)'));
+    el.addEventListener('waiting', () => this.note('song buffering'));
+    el.addEventListener('ended', () => {
+      // Shouldn't happen (we loop before the end), but never let the music just stop.
+      el.currentTime = SONG_LOOP.start;
+      if (!this.heldByGame && this.playing) this.playSong();
+    });
+    this.song = el;
+  }
+
+  private playSong(): void {
+    const el = this.song;
+    if (!el) return;
+    if (el.playbackRate !== this.rate) el.playbackRate = this.rate;
+    el.play().then(() => (this.pendingResume = false)).catch((e) => this.onPlayError(e));
   }
 
   /** Mobile browsers refuse play() until a real gesture: wait for one instead of giving up. */
   private onPlayError(e: unknown): void {
     const name = e instanceof DOMException ? e.name : '';
-    if (name === 'NotAllowedError') this.pendingResume = true;
-    else if (name !== 'AbortError') this.songFailed(); // AbortError = interrupted by pause(), harmless
-  }
-
-  /**
-   * iOS only lets an <audio> element play later if it was started once inside a gesture. Start
-   * each idle copy muted for a moment during a gesture so the loop hand-over is allowed.
-   */
-  private blessSongs(): void {
-    this.songs.forEach((s, i) => {
-      if (s.blessed || (i === this.songIdx && this.usingSong && this.playing)) return;
-      const wasMuted = s.el.muted;
-      s.el.muted = true;
-      s.el
-        .play()
-        .then(() => {
-          s.blessed = true;
-          if (!(i === this.songIdx && this.usingSong && this.playing && !this.fading)) {
-            s.el.pause();
-            s.el.currentTime = SONG_LOOP.start;
-          }
-          s.el.muted = wasMuted;
-        })
-        .catch(() => {
-          s.el.muted = wasMuted;
-        });
-    });
+    if (name === 'NotAllowedError') {
+      this.pendingResume = true;
+      this.note('song needs a tap to resume');
+    } else if (name !== 'AbortError') this.songFailed(); // AbortError = interrupted by pause(), harmless
   }
 
   /** The file couldn't be loaded or decoded: fall back to the chiptune for good. */
   private songFailed(): void {
-    if (!this.songs.length) return;
-    this.stopSongs();
-    this.songs = [];
+    if (!this.song) return;
+    this.note('song failed: chiptune instead');
+    this.song.pause();
+    this.song = null;
     this.songAvailable = false;
     this.usingSong = false;
-    if (this.playing) this.startSequencer();
+    if (this.playing && !this.heldByGame) this.startSequencer();
   }
 
   private loopEnd(el: HTMLAudioElement): number {
@@ -225,95 +234,63 @@ export class AudioManager {
     return Math.min(SONG_LOOP.end, dur - 0.05);
   }
 
-  private setSongVolume(i: number, v: number, at?: number): void {
-    const s = this.songs[i];
-    if (!s) return;
-    if (s.gain && this.ctx) {
-      const t = this.ctx.currentTime;
-      s.gain.gain.cancelScheduledValues(t);
-      if (at === undefined) s.gain.gain.setValueAtTime(v, t);
-      else {
-        s.gain.gain.setValueAtTime(s.gain.gain.value, t);
-        s.gain.gain.linearRampToValueAtTime(v, t + at);
-      }
-    } else {
-      s.el.volume = v;
+  /**
+   * Call every frame. Loops the song at SONG_LOOP.end, applies rate changes, and a few times a
+   * second runs the watchdog that recovers from iOS pausing/stalling the song or interrupting
+   * the AudioContext.
+   */
+  tick(nowMs: number): void {
+    const el = this.song;
+    const active = this.playing && !this.heldByGame && document.visibilityState === 'visible';
+    if (el && this.usingSong && active && !el.paused) {
+      // One frame of look-ahead so the jump lands before the music's tail.
+      if (el.currentTime >= this.loopEnd(el) - 0.02 * this.rate) el.currentTime = SONG_LOOP.start;
+    }
+    if (nowMs - this.lastWatch < WATCH_EVERY) return;
+    const dt = (nowMs - this.lastWatch) / 1000;
+    this.lastWatch = nowMs;
+    if (el && el.playbackRate !== this.rate) el.playbackRate = this.rate;
+
+    const songTime = el ? el.currentTime : 0;
+    const progressing = !!el && !el.paused && Math.abs(songTime - this.lastSongTime) > 0.01;
+    this.stuckFor = el && !el.paused && !progressing && active ? this.stuckFor + dt : 0;
+    const action = musicAction({
+      want: active && !this.pendingResume,
+      usingSong: this.usingSong && !!el,
+      songPaused: !!el && el.paused,
+      songTime,
+      lastSongTime: this.lastSongTime,
+      stuckFor: this.stuckFor,
+      ctxState: this.ctx ? (this.ctx.state as AudioContextState) : 'none',
+    });
+    this.lastSongTime = songTime;
+    if (action === 'resume-ctx' && this.ctx) {
+      this.note(`resuming audio context (${this.ctx.state})`);
+      this.restarts++;
+      void this.ctx.resume();
+    } else if (action === 'play' && el) {
+      this.note(this.stuckFor >= STUCK_PLAY_AFTER ? 'song stuck: nudging' : 'song was paused: restarting');
+      this.restarts++;
+      this.playSong();
+    } else if (action === 'reload' && el) {
+      this.note('song stuck: reloading');
+      this.restarts++;
+      const t = el.currentTime;
+      el.load();
+      el.currentTime = t;
+      this.stuckFor = 0;
+      this.playSong();
     }
   }
 
-  private playSongFrom(t: number): void {
-    this.stopSongs();
-    this.songIdx = 0;
-    const cur = this.songs[0].el;
-    cur.currentTime = t;
-    cur.playbackRate = this.rate;
-    this.setSongVolume(0, 1);
-    this.primeNext();
-    cur.play().then(() => (this.songs[0].blessed = true)).catch((e) => this.onPlayError(e));
-    this.startSongTimer();
+  /** For tests and the debug overlay. */
+  get songState(): { time: number; playing: boolean; rate: number; pitchKept: boolean } | null {
+    const el = this.song;
+    return el ? { time: el.currentTime, playing: !el.paused, rate: el.playbackRate, pitchKept: el.preservesPitch } : null;
   }
 
-  /** Park the idle copy at the loop start so the hand-over starts instantly. */
-  private primeNext(): void {
-    const next = this.songs[1 - this.songIdx];
-    if (!next) return;
-    next.el.pause();
-    next.el.currentTime = SONG_LOOP.start;
-    this.setSongVolume(1 - this.songIdx, 0);
-  }
-
-  private startSongTimer(): void {
-    if (this.songTimer !== null) return;
-    this.songTimer = window.setInterval(() => this.checkLoop(), 20);
-  }
-
-  private checkLoop(): void {
-    if (!this.usingSong || this.fading) return;
-    const cur = this.songs[this.songIdx];
-    if (!cur || cur.el.paused) return;
-    const remaining = (this.loopEnd(cur.el) - cur.el.currentTime) / this.rate;
-    if (remaining > SONG_LOOP.crossfade) return;
-    // Crossfade into the other copy, already parked at the loop start.
-    const from = this.songIdx;
-    const to = 1 - from;
-    const next = this.songs[to].el;
-    next.playbackRate = this.rate;
-    next.play().catch((e) => this.onPlayError(e));
-    this.setSongVolume(to, 1, SONG_LOOP.crossfade);
-    this.setSongVolume(from, 0, SONG_LOOP.crossfade);
-    this.songIdx = to;
-    this.fading = true;
-    window.setTimeout(() => {
-      this.fading = false;
-      if (this.songIdx !== to) return;
-      const old = this.songs[from];
-      if (old) {
-        old.el.pause();
-        old.el.currentTime = SONG_LOOP.start; // ready for the next hand-over
-      }
-    }, (SONG_LOOP.crossfade + 0.08) * 1000);
-  }
-
-  private pauseSongs(): void {
-    for (const s of this.songs) s.el.pause();
-  }
-
-  private resumeSongs(): void {
-    const cur = this.songs[this.songIdx];
-    if (cur) cur.el.play().catch((e) => this.onPlayError(e));
-  }
-
-  private stopSongs(): void {
-    if (this.songTimer !== null) window.clearInterval(this.songTimer);
-    this.songTimer = null;
-    this.fading = false;
-    this.pauseSongs();
-  }
-
-  /** For automated tests: current song position (seconds) and which copy is playing. */
-  get songState(): { time: number; copy: number; playing: boolean } | null {
-    const cur = this.songs[this.songIdx];
-    return cur ? { time: cur.el.currentTime, copy: this.songIdx, playing: !cur.el.paused } : null;
+  get contextState(): string {
+    return this.ctx ? this.ctx.state : 'not started';
   }
 
   // ------------------------------------------------------------ sequencer
