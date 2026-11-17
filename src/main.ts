@@ -174,5 +174,20 @@ function frame(now: number): void {
 syncUi();
 requestAnimationFrame(frame);
 
-// Read-only hook for automated browser tests.
-(window as unknown as { __busGame: unknown }).__busGame = { game, audio };
+// Browser-test hook. Production only gets a read-only snapshot (plain copies, no references), so
+// nothing on the live site can clear the road or turn collisions off. The mutable objects are
+// exposed in dev builds only; Vite removes that branch from production bundles.
+const hook: Record<string, unknown> = {
+  snapshot: () => ({
+    phase: game.phase,
+    target: game.world.bus.target,
+    pos: game.world.bus.pos,
+    score: game.world.score,
+    highScore: game.highScore,
+    obstacles: game.world.obstacles.length,
+    audio: audio.source,
+    muted: audio.muted,
+  }),
+};
+if (import.meta.env.DEV) Object.assign(hook, { game, audio });
+(window as unknown as { __busGame: unknown }).__busGame = Object.freeze(hook);
