@@ -22,7 +22,7 @@ Reference images are style-only: never copy them or commit them.
 - [x] 0.3 Music stopping ~10 s in on iPhone: find the cause (main-thread stalls, AudioContext suspended/interrupted, memory); stream with an audio element if needed; recover automatically after an iOS interruption
 - [x] 0.4 General performance: cap device pixel ratio, draw at internal resolution and scale once, clean up particles/puffs/bubbles off screen, smooth rendering between fixed 60 Hz updates (120 Hz screens)
 - [x] 0.5 Debug overlay toggled by tapping the score 5 times: FPS and music status
-- [ ] 0.6 Stage 0 tests pass, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+- [x] 0.6 Stage 0 tests pass, headless check at 390px portrait + landscape, deployed and checked live -> STOP
 
 ### Stage 0 notes
 - Draw calls per frame (traffic + a bubble): fillRect 1013 -> 5, fillStyle changes 807 -> 5, drawImage 82 -> 33.
@@ -33,6 +33,9 @@ Reference images are style-only: never copy them or commit them.
   interrupted AudioContext. The previous build never decoded the song into an AudioBuffer.
 - Fixed 60 Hz simulation with render interpolation; canvas stays 256x144 (DPR only picks the CSS scale).
 - Debug overlay: tap the HUD score 5 times (remembered on the device).
+- Live check (00a7a32): 66 unit tests pass; portrait + landscape at 390px; overlay toggles; a 45 s
+  live run kept the song playing the whole time (0 silent samples); warm-up held 20 s.
+- **Waiting for the owner to test Stage 0 on the iPhone before starting Stage 1.**
 
 ## Stage 1: gameplay
 - [ ] 1.1 Lime-and-chilli boost: chilli pickups; 2 chillies hang a charm on the back of the bus; lime appears only after 2 chillies; lime completes the charm and starts the boost
