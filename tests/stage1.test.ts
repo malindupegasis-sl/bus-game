@@ -5,7 +5,7 @@ import {
   BOOST_SCORE, BOOST_SPEED, BOOST_TIME, SAVE_INVINCIBLE_TIME, TRANSITION_TIME, collect, newCharm, nextPickup, onHit,
   tickCharm,
 } from '../src/game/charm';
-import { CONVOY_COOLDOWN, DIFFICULTY, EXTRA_WEIGHTS, speedAt } from '../src/game/difficulty';
+import { CONVOY_SCHEDULE, DIFFICULTY, speedAt } from '../src/game/difficulty';
 import { hasSafePath, occupancy } from '../src/game/fairness';
 import { CONVOY_LENGTH, KINDS, type Obstacle } from '../src/game/obstacles';
 import { collectWindow, pickupIsSafe, type Pickup } from '../src/game/pickups';
@@ -133,30 +133,40 @@ describe('Dham Rajina Xpress boost', () => {
 });
 
 describe("politician's convoy", () => {
-  it('is 5 SUVs long, never appears during the warm-up, and is rare', () => {
+  it('is 5 SUVs long; the first comes at ~30 s, then about every 35 s, never two within 20 s', () => {
     expect(CONVOY_LENGTH).toBe(5 * 32 + 4 * 2);
     expect(KINDS.convoy.width).toBe(CONVOY_LENGTH);
-    let convoys = 0;
+    expect(CONVOY_SCHEDULE).toMatchObject({ first: 30, every: 35, minGap: 20 });
+    const firsts: number[] = [];
+    const gaps: number[] = [];
     for (const seed of SEEDS) {
       const w = new World(seed, { pickups: false });
       const times: number[] = [];
       const seen = new Set<number>();
-      while (w.t < 150) {
+      while (w.t < 150 && !w.crashed) {
+        safeBotStep(w);
         w.step(DT);
-        if (w.crashed) break;
         for (const o of w.obstacles) {
           if (o.kind !== 'convoy' || seen.has(o.id)) continue;
           seen.add(o.id);
           times.push(w.t);
         }
-        w.obstacles = w.obstacles.filter((o) => o.kind === 'convoy'); // keep the road clear-ish
       }
+      expect(w.crashed, `seed ${seed}`).toBe(false);
+      expect(times.length, `seed ${seed}: convoys by 150 s`).toBeGreaterThanOrEqual(3);
       for (const t of times) expect(t).toBeGreaterThanOrEqual(DIFFICULTY.warmupTime);
-      for (let i = 1; i < times.length; i++) expect(times[i] - times[i - 1]).toBeGreaterThanOrEqual(CONVOY_COOLDOWN - 0.1);
-      convoys += times.length;
+      firsts.push(times[0]);
+      for (let i = 1; i < times.length; i++) gaps.push(times[i] - times[i - 1]);
     }
-    expect(convoys).toBeGreaterThan(SEEDS.length * 0.5);
-    expect(convoys / SEEDS.length).toBeLessThan(150 / CONVOY_COOLDOWN + 0.01);
+    // First convoy: due at 30 s; it may wait a moment for a fair lane.
+    for (const f of firsts) expect(f).toBeGreaterThanOrEqual(30);
+    const onTime = firsts.filter((f) => f <= 33).length / firsts.length;
+    expect(onTime).toBeGreaterThan(0.9);
+    // Then about every 35 s, never within 20 s.
+    for (const g of gaps) expect(g).toBeGreaterThanOrEqual(CONVOY_SCHEDULE.minGap);
+    const meanGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    expect(meanGap).toBeGreaterThan(33);
+    expect(meanGap).toBeLessThan(39);
   });
 
   it('counts as one long lane block in the fairness model', () => {
@@ -170,9 +180,9 @@ describe("politician's convoy", () => {
     expect(ivs[0].to - ivs[0].from).toBeGreaterThan((lorry.to - lorry.from) * 2);
   });
 
-  it('stress test: convoys every chance they get, and a perfect bot still always has a way through', () => {
-    const saved = { ...EXTRA_WEIGHTS };
-    (EXTRA_WEIGHTS as { convoy: number }).convoy = 3; // far more convoys than the real game
+  it('stress test: a convoy every 20 s (the minimum), and a perfect bot still always has a way through', () => {
+    const saved = { ...CONVOY_SCHEDULE };
+    Object.assign(CONVOY_SCHEDULE, { first: 20, every: 20, jitter: 0 });
     try {
       let convoys = 0;
       for (const seed of SEEDS.slice(0, 30)) {
@@ -186,9 +196,9 @@ describe("politician's convoy", () => {
         expect(w.crashed, `seed ${seed} crashed at t=${w.t.toFixed(1)}`).toBe(false);
         convoys += ids.size;
       }
-      expect(convoys).toBeGreaterThan(60);
+      expect(convoys).toBeGreaterThan(30 * 5);
     } finally {
-      Object.assign(EXTRA_WEIGHTS, saved);
+      Object.assign(CONVOY_SCHEDULE, saved);
     }
   });
 });

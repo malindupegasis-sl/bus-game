@@ -62,17 +62,21 @@ export function maxObstaclesAt(t: number): number {
  *   v1.3: lorry 56.4%, tuk-tuk 34.2%, motorbike  9.5%  (same mix; weights re-calibrated because the
  *         74px bus and 20s warm-up change which candidates pass the fairness check)
  *   v2:   lorry 56.4%, tuk-tuk 34.0%, motorbike  9.6%  (same mix, re-calibrated with convoys and
- *         rival buses on the road; those are extras on top: ~1 rival / 18 s, ~1 convoy / 50 s)
+ *         rival buses on the road; those are extras on top: ~1 rival / 18 s, convoys on a schedule)
  * tests/spawner.test.ts checks the mix stays near these numbers.
  */
 export const KIND_WEIGHTS = { lorry: 1.4, tuktuk: 0.9, bike: 0.115 } as const;
 
 /** The mix uses the real clock (not the warm-up-shifted one), so tuk-tuks still arrive from 8s. */
-/** Extras on top of the core mix: rare convoys (only after the warm-up) and rival buses. */
-export const EXTRA_WEIGHTS = { convoy: 0.06, rival: 0.06 } as const;
+/** Extras on top of the core mix. Rival buses are random; convoys run on a schedule (below). */
+export const EXTRA_WEIGHTS = { rival: 0.06 } as const;
 export const RIVAL_FROM = 5; // seconds
-/** At least this long between two convoys. */
-export const CONVOY_COOLDOWN = 30; // seconds
+/**
+ * Politician's convoy schedule (seconds of play): the first one is due at 30 s (after the warm-up),
+ * then about every 35 s (±3), and never two within 20 s. A due convoy still has to pass the fairness
+ * check; if no lane is fair right now, the spawner tries again a moment later.
+ */
+export const CONVOY_SCHEDULE = { first: 30, every: 35, jitter: 3, minGap: 20 };
 
 export function kindWeightsAt(t: number): Record<ObstacleKind, number> {
   const tuk = t < DIFFICULTY.tuktukFrom ? 0 : KIND_WEIGHTS.tuktuk * clamp01((t - DIFFICULTY.tuktukFrom) / 20);
@@ -80,7 +84,7 @@ export function kindWeightsAt(t: number): Record<ObstacleKind, number> {
     lorry: KIND_WEIGHTS.lorry,
     tuktuk: tuk,
     bike: KIND_WEIGHTS.bike,
-    convoy: t < DIFFICULTY.warmupTime ? 0 : EXTRA_WEIGHTS.convoy,
+    convoy: 0, // scheduled, not random: see CONVOY_SCHEDULE
     rival: t < RIVAL_FROM ? 0 : EXTRA_WEIGHTS.rival,
   };
 }

@@ -1,5 +1,5 @@
 import { LANE_COUNT, SPAWN_X } from '../config';
-import { CONVOY_COOLDOWN, kindWeightsAt, maxObstaclesAt, spawnGapAt, speedAt } from './difficulty';
+import { CONVOY_SCHEDULE, DIFFICULTY, kindWeightsAt, maxObstaclesAt, spawnGapAt, speedAt } from './difficulty';
 import { keepsPickupsSafe, type Pickup } from './pickups';
 import { lanesWithPath, occupancy, screenConflict, type Interval } from './fairness';
 import {
@@ -11,12 +11,14 @@ import { randInt, randRange, type Rng } from './rng';
 export interface SpawnerState {
   nextSpawnD: number;
   nextId: number;
-  /** Play time of the last convoy (for the cooldown). */
+  /** Play time of the last convoy, when the next one is due, and the next distance to try one. */
   lastConvoyT: number;
+  nextConvoyT: number;
+  nextConvoyTryD: number;
 }
 
 export function createSpawner(firstSpawnD = 60): SpawnerState {
-  return { nextSpawnD: firstSpawnD, nextId: 1, lastConvoyT: -Infinity };
+  return { nextSpawnD: firstSpawnD, nextId: 1, lastConvoyT: -Infinity, nextConvoyT: CONVOY_SCHEDULE.first, nextConvoyTryD: 0 };
 }
 
 /** How far ahead (seconds) the spawner looks when picking a pessimistic speed. */
@@ -80,8 +82,8 @@ export interface SpawnContext {
 /** At most this many motorbikes at once, and never two in the same lane on screen. */
 const MAX_BIKES = 2;
 
-function kindAllowed(kind: ObstacleKind, lane: number, obstacles: readonly Obstacle[], t: number, s: SpawnerState): boolean {
-  if (kind === 'convoy') return t - s.lastConvoyT >= CONVOY_COOLDOWN && !obstacles.some((o) => o.kind === 'convoy');
+function kindAllowed(kind: ObstacleKind, lane: number, obstacles: readonly Obstacle[]): boolean {
+  if (kind === 'convoy') return false; // only ever spawned by the schedule
   if (kind === 'rival') return !obstacles.some((o) => o.kind === 'rival');
   if (kind !== 'bike') return true;
   const bikes = obstacles.filter((o) => o.kind === 'bike');
@@ -96,31 +98,60 @@ function kindAllowed(kind: ObstacleKind, lane: number, obstacles: readonly Obsta
  */
 export function updateSpawner(s: SpawnerState, ctx: SpawnContext): Obstacle | null {
   const { d, t, obstacles, rng, busLane, pickups } = ctx;
-  if (d < s.nextSpawnD) return null;
   const speedNow = speedAt(t);
   const speedSafe = speedAt(t + SPEED_LOOKAHEAD);
 
+  const base: Interval[] = [];
+  let before: boolean[] | null = null;
+  const prepare = () => {
+    if (before) return before;
+    for (const o of obstacles) for (const iv of occupancy(o, speedSafe)) if (iv.to > d) base.push(iv);
+    before = lanesWithPath(base, d, speedSafe);
+    return before;
+  };
+  /** The fairness rules every new vehicle must pass. */
+  const fair = (cand: Obstacle): boolean => {
+    const b = prepare();
+    if (obstacles.some((o) => screenConflict(o, cand))) return false;
+    const withCand = [...base, ...occupancy(cand, speedSafe)];
+    const after = lanesWithPath(withCand, d, speedSafe);
+    if (!after.some(Boolean)) return false;
+    if (busLane !== undefined && !after[busLane]) return false;
+    if (b.some((ok, l) => ok && !after[l])) return false;
+    if (pickups && !keepsPickupsSafe(pickups, d, withCand, cand, speedSafe)) return false;
+    return true;
+  };
+
+  // Scheduled politician's convoy (it may go one over the usual vehicle cap).
+  const convoyDue =
+    t >= s.nextConvoyT && t >= DIFFICULTY.warmupTime && t - s.lastConvoyT >= CONVOY_SCHEDULE.minGap &&
+    !obstacles.some((o) => o.kind === 'convoy');
+  if (convoyDue && d >= s.nextConvoyTryD) {
+    s.nextConvoyTryD = d + 0.1 * speedNow;
+    const start = randInt(rng, 0, LANE_COUNT - 1);
+    for (let i = 0; i < LANE_COUNT; i++) {
+      const cand = makeObstacle(s.nextId, 'convoy', (start + i) % LANE_COUNT, d, speedNow, rng);
+      if (!fair(cand)) continue;
+      s.nextId++;
+      s.lastConvoyT = t;
+      s.nextConvoyT = t + CONVOY_SCHEDULE.every + randRange(rng, -CONVOY_SCHEDULE.jitter, CONVOY_SCHEDULE.jitter);
+      s.nextSpawnD = Math.max(s.nextSpawnD, d + 0.5 * speedNow);
+      return cand;
+    }
+  }
+
+  if (d < s.nextSpawnD) return null;
   if (obstacles.length >= maxObstaclesAt(t)) {
     s.nextSpawnD = d + 0.1 * speedNow;
     return null;
   }
 
-  const base: Interval[] = [];
-  for (const o of obstacles) for (const iv of occupancy(o, speedSafe)) if (iv.to > d) base.push(iv);
-  const before = lanesWithPath(base, d, speedSafe);
-
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const kind = pickKind(rng, t);
     const lane = randInt(rng, 0, LANE_COUNT - 1);
-    if (!kindAllowed(kind, lane, obstacles, t, s)) continue;
+    if (!kindAllowed(kind, lane, obstacles)) continue;
     const cand = makeObstacle(s.nextId, kind, lane, d, speedNow, rng);
-    if (obstacles.some((o) => screenConflict(o, cand))) continue;
-    const after = lanesWithPath([...base, ...occupancy(cand, speedSafe)], d, speedSafe);
-    if (!after.some(Boolean)) continue;
-    if (busLane !== undefined && !after[busLane]) continue;
-    if (before.some((ok, l) => ok && !after[l])) continue;
-    if (pickups && !keepsPickupsSafe(pickups, d, [...base, ...occupancy(cand, speedSafe)], cand, speedSafe)) continue;
-    if (kind === 'convoy') s.lastConvoyT = t;
+    if (!fair(cand)) continue;
     s.nextId++;
     s.nextSpawnD = d + spawnGapAt(t) * speedNow * randRange(rng, 0.7, 1.3);
     return cand;

@@ -80,7 +80,11 @@ Reference images are style-only: never copy them or commit them.
 - [x] 1.19 Charm moved under the front bumper, in proportion to the bus; grows 1 chilli -> 2 chillies -> full with lime (boost); sways (more on lane changes); not part of the hitbox
 - [x] 1.20 Deployed and checked live (a3cd97b): 86 unit tests; portrait + landscape at 390px; live run
   with music throughout, no errors; 2.5x chilli seen live; 11 s chipmunk boost verified in the dev build.
-- **Waiting for the owner to test these fixes on the iPhone before starting Stage 2.**
+- Owner tested on iPhone and is happy with Stage 1. Two changes before Stage 2:
+
+### Before Stage 2
+- [x] 1.21 Convoy schedule: first at ~30 s (after the warm-up), then about every 35 s (±3), never two within 20 s; fairness rule applies (measured: first convoy at 30.1 s on average, ~5 per 3-minute run; core mix unchanged 56.3/34.1/9.6)
+- [ ] 1.22 HUD: remove the route map and analog speedometer; bigger score and digital speed; charm icon stays next to the score; landscape buttons don't cover anything important
 
 ## Stage 2: bus customisation
 - [ ] 2.1 Garage screen from the start menu: bus colours
