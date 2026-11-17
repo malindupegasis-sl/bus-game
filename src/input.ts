@@ -73,7 +73,10 @@ export function attachInput(h: InputHandlers, buttons: { el: HTMLElement; dir: D
   // No scrolling / pinch-zoom / double-tap zoom / long-press menus while playing.
   const block = (e: Event) => {
     const t = e.target;
-    if (!(t instanceof Element && t.closest('a, #btn-retry, #btn-mute'))) e.preventDefault();
+    // Real buttons, links and the garage panel must keep their clicks (cancelling touchstart on a
+    // phone cancels the click that follows). The thumb buttons act on pointerdown and have
+    // touch-action: none, so they don't need this either way.
+    if (!(t instanceof Element && t.closest('a, button, #garage'))) e.preventDefault();
   };
   for (const type of ['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'dblclick', 'contextmenu', 'selectstart']) {
     document.addEventListener(type, block, { passive: false });

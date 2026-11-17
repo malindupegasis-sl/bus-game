@@ -87,11 +87,22 @@ Reference images are style-only: never copy them or commit them.
 - [x] 1.22 HUD: route map and analog speedometer removed; score and speed in big 12x20 LCD digits (was 8x14); charm icon next to the score; HUD content kept in x 37..219 so landscape thumb buttons never cover it (tested on 10 screen sizes incl. 16:9 667x375 and 568x320)
 
 ## Stage 2: bus customisation
-- [ ] 2.1 Garage screen from the start menu: bus colours
-- [ ] 2.2 Decorations: sign board style, lights, stickers
-- [ ] 2.3 Saved on the device (localStorage, try/catch)
-- [ ] 2.4 Dham Rajina Xpress look overrides the custom look while boosted
+- [x] 2.1 Garage screen from the start menu: bus colours
+- [x] 2.2 Decorations: sign board style, lights, stickers
+- [x] 2.3 Saved on the device (localStorage, try/catch)
+- [x] 2.4 Dham Rajina Xpress look overrides the custom look while boosted
 - [ ] 2.5 Tests, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+
+### Stage 2 notes
+- Garage options: colour (Classic red, Ocean teal, Emerald, Sunset orange, Midnight, Banana; no
+  blue+yellow so you never look like a rival), sign board (Amber 138, Green LED, Red LED, Scrolling),
+  lights (None, Roof LEDs, Rainbow chase), stickers (None, Stars, Flames, Flowers).
+- Saved as JSON under busgame.garage; anything unknown/broken falls back to the default per field.
+- UI: GARAGE button on the start screen; HTML options panel (44px+ buttons) under the game in
+  portrait, beside a 2x preview in landscape (rows stack on narrow 16:9 phones).
+- Found in testing: the anti-scroll touch handler swallowed taps on new buttons; it now leaves all
+  buttons, links and the garage panel alone (zoom/scroll still blocked by CSS touch-action).
+- Items 2.1-2.4 landed in one commit (they share the renderer and main).
 
 ## Stage 3: routes
 - [ ] 3.1 Route picker before a run: 138 (Colombo city) and Colombo to Kandy (route 1)

@@ -1,7 +1,7 @@
 import { loadHighScore, saveHighScore } from './score';
 import { World } from './world';
 
-export type Phase = 'title' | 'playing' | 'paused' | 'crashed' | 'over';
+export type Phase = 'title' | 'garage' | 'playing' | 'paused' | 'crashed' | 'over';
 export type Dir = -1 | 1;
 
 /** How long the crash animation plays before the game over screen. */
@@ -29,6 +29,19 @@ export class Game {
   private setPhase(p: Phase): void {
     this.phase = p;
     this.phaseTime = 0;
+  }
+
+  /** Garage (bus customisation): only from the title screen. */
+  openGarage(): boolean {
+    if (this.phase !== 'title') return false;
+    this.setPhase('garage');
+    return true;
+  }
+
+  closeGarage(): boolean {
+    if (this.phase !== 'garage') return false;
+    this.setPhase('title');
+    return true;
   }
 
   start(seed?: number): void {
@@ -65,8 +78,9 @@ export class Game {
     return 'none';
   }
 
-  /** Enter/Space: start, resume, or retry. */
+  /** Enter/Space: start, resume, or retry (in the garage: back to the title). */
   primary(): 'start' | 'resume' | 'retry' | 'none' {
+    if (this.phase === 'garage') return this.closeGarage(), 'none';
     if (this.phase === 'title') return this.start(), 'start';
     if (this.phase === 'paused') return this.resume(), 'resume';
     if (this.canRetry()) return this.start(), 'retry';

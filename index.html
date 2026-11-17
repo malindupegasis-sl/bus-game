@@ -21,6 +21,7 @@
         <button id="btn-mute" class="hit" type="button" aria-label="Mute" aria-pressed="false">Mute</button>
         <button id="btn-retry" class="hit" type="button" hidden>Retry</button>
         <a id="btn-share" class="hit" target="_blank" rel="noopener" hidden>Share on WhatsApp</a>
+        <button id="btn-garage" class="hit" type="button" hidden>Garage</button>
       </div>
       <button id="btn-up" class="ctrl" type="button" tabindex="-1" aria-label="Move up a lane">
         <svg viewBox="0 0 9 5" aria-hidden="true"><path fill="#f8b800" d="M4 0h1v1h1v1h1v1h1v1h1v1H0V4h1V3h1V2h1V1h1z" /></svg>
@@ -28,6 +29,10 @@
       <button id="btn-down" class="ctrl" type="button" tabindex="-1" aria-label="Move down a lane">
         <svg viewBox="0 0 9 5" aria-hidden="true"><path fill="#f8b800" d="M0 0h9v1H8v1H7v1H6v1H5v1H4V4H3V3H2V2H1V1H0z" /></svg>
       </button>
+    </div>
+    <div id="garage" role="dialog" aria-label="Garage: customise your bus" hidden>
+      <div id="garage-rows"></div>
+      <button id="garage-done" type="button">DONE</button>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

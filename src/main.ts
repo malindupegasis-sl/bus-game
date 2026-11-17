@@ -4,10 +4,11 @@ import { VIEW_H, VIEW_W } from './config';
 import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
-import { Renderer } from './render/renderer';
+import { GARAGE_PANEL_LEFT, Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
+import { FIELD_LABELS, cycle, loadStyle, optionName, saveStyle, type BusStyle, type StyleField } from './game/garage';
 import { HUD, UI_RECTS, type Rect } from './ui-layout';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -20,8 +21,14 @@ const btnDown = $<HTMLButtonElement>('#btn-down');
 const btnMute = $<HTMLButtonElement>('#btn-mute');
 const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
+const btnGarage = $<HTMLButtonElement>('#btn-garage');
+const garagePanel = $<HTMLDivElement>('#garage');
+const garageRows = $<HTMLDivElement>('#garage-rows');
+const garageDone = $<HTMLButtonElement>('#garage-done');
 
 const renderer = new Renderer(canvas);
+let busStyle: BusStyle = loadStyle();
+renderer.style = busStyle;
 const game = new Game();
 const audio = new AudioManager();
 renderer.touchHint = window.matchMedia('(pointer: coarse)').matches;
@@ -47,6 +54,18 @@ function layout(): void {
   setBox(btnUp, l.up);
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
+  document.body.dataset.controls = l.mode;
+  renderer.garageLeft = l.mode === 'overlay';
+  // Landscape garage: the panel starts just right of the 2x bus preview.
+  if (l.mode === 'overlay') {
+    const left = l.canvas.x + GARAGE_PANEL_LEFT * (l.canvas.w / VIEW_W) + parseFloat(cs.paddingLeft);
+    const width = Math.max(220, window.innerWidth - parseFloat(cs.paddingRight) - 12 - left);
+    garagePanel.style.width = `${width}px`;
+    garagePanel.classList.toggle('narrow', width < 300); // stack label above ◀ value ▶
+  } else {
+    garagePanel.style.width = '';
+    garagePanel.classList.remove('narrow');
+  }
 }
 
 function place(el: HTMLElement, r: Rect, grow = 0): void {
@@ -58,6 +77,7 @@ function place(el: HTMLElement, r: Rect, grow = 0): void {
 place(btnMute, UI_RECTS.mute, 6);
 place(btnRetry, UI_RECTS.retry);
 place(btnShare, UI_RECTS.share);
+place(btnGarage, UI_RECTS.garage, 4);
 
 window.addEventListener('resize', layout);
 window.visualViewport?.addEventListener('resize', layout);
@@ -148,6 +168,59 @@ attachInput(
   ],
 );
 
+// ------------------------------------------------------------ garage
+
+const valueEls = new Map<StyleField, HTMLElement>();
+for (const field of Object.keys(FIELD_LABELS) as StyleField[]) {
+  const row = document.createElement('div');
+  row.className = 'garage-row';
+  const label = document.createElement('span');
+  label.textContent = FIELD_LABELS[field];
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.textContent = '◀';
+  prev.setAttribute('aria-label', `Previous ${FIELD_LABELS[field].toLowerCase()}`);
+  const value = document.createElement('span');
+  value.className = 'value';
+  value.setAttribute('aria-live', 'polite');
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.textContent = '▶';
+  next.setAttribute('aria-label', `Next ${FIELD_LABELS[field].toLowerCase()}`);
+  const change = (dir: -1 | 1) => (e: Event) => {
+    e.stopPropagation();
+    busStyle = cycle(busStyle, field, dir);
+    renderer.style = busStyle;
+    saveStyle(busStyle);
+    renderGarage();
+  };
+  prev.addEventListener('click', change(-1));
+  next.addEventListener('click', change(1));
+  row.append(label, prev, value, next);
+  garageRows.append(row);
+  valueEls.set(field, value);
+}
+
+function renderGarage(): void {
+  for (const [field, el] of valueEls) el.textContent = optionName(busStyle, field);
+}
+renderGarage();
+
+btnGarage.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (game.openGarage()) syncUi();
+});
+garageDone.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (game.closeGarage()) syncUi();
+});
+window.addEventListener('keydown', (e) => {
+  if (game.phase === 'garage' && (e.code === 'Escape' || e.code === 'Enter')) {
+    e.preventDefault();
+    if (game.closeGarage()) syncUi();
+  }
+});
+
 btnMute.addEventListener('click', (e) => {
   e.stopPropagation();
   audio.unlock();
@@ -191,6 +264,8 @@ function syncUi(): void {
   btnRetry.hidden = !over;
   btnShare.hidden = !over;
   btnMute.hidden = game.phase === 'crashed';
+  btnGarage.hidden = game.phase !== 'title';
+  garagePanel.hidden = game.phase !== 'garage';
   if (over) btnShare.href = whatsappUrl(game.world.score);
   document.body.dataset.phase = game.phase;
 }
@@ -239,6 +314,7 @@ const hook: Record<string, unknown> = {
     song: audio.songState,
     muted: audio.muted,
     debug: debug.on,
+    style: { ...busStyle },
     chillies: game.world.charm.chillies,
     boosting: game.world.charm.boostT > 0,
     invincible: game.world.invincible,

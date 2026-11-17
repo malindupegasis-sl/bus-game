@@ -120,3 +120,82 @@ body[data-phase='crashed'] .ctrl {
 #debug[hidden] {
   display: none;
 }
+
+/* Garage (bus customisation) panel */
+#garage {
+  position: fixed;
+  z-index: 5;
+  left: calc(env(safe-area-inset-left) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+  background: rgba(26, 4, 0, 0.94);
+  border: 4px solid #000;
+  box-shadow: 0 0 0 4px #6c0c00;
+  color: #fce0a8;
+  font: bold 14px/1.1 ui-monospace, Menlo, Consolas, monospace;
+  text-transform: uppercase;
+  touch-action: manipulation;
+}
+#garage[hidden] {
+  display: none;
+}
+body[data-controls='overlay'] #garage {
+  left: auto;
+  top: calc(env(safe-area-inset-top) + 8px);
+  bottom: calc(env(safe-area-inset-bottom) + 8px);
+  font-size: 13px;
+  justify-content: center;
+  overflow: auto;
+}
+.garage-row {
+  display: grid;
+  grid-template-columns: 1fr 44px minmax(6.5em, auto) 44px;
+  align-items: center;
+  gap: 6px;
+}
+.garage-row .value {
+  text-align: center;
+  color: #ffffff;
+}
+#garage button {
+  min-width: 44px;
+  min-height: 44px;
+  border: 3px solid #000;
+  border-radius: 8px;
+  background: #c41c00;
+  box-shadow: inset 0 3px 0 #f85838, inset 0 -4px 0 #6c0c00;
+  color: #f8b800;
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+#garage button:active {
+  transform: translateY(2px);
+}
+#garage-done {
+  min-height: 48px !important;
+  background: #00a844 !important;
+  box-shadow: inset 0 3px 0 #58e858, inset 0 -4px 0 #006028 !important;
+  color: #ffffff !important;
+}
+body[data-phase='garage'] .ctrl {
+  display: none;
+}
+
+/* Narrow landscape panel (16:9 phones): label on its own line, then ◀ value ▶ */
+#garage.narrow {
+  gap: 4px;
+  justify-content: flex-start;
+}
+#garage.narrow .garage-row {
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  row-gap: 2px;
+}
+#garage.narrow .garage-row > span:first-child {
+  grid-column: 1 / -1;
+}

@@ -7,6 +7,7 @@ import { formatScore } from '../game/score';
 import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
+import { COLOURS, DEFAULT_STYLE, SIGNS, effectiveLook, type BusStyle } from '../game/garage';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
 import { HUD, UI_RECTS, type Rect } from '../ui-layout';
@@ -21,6 +22,9 @@ type Align = 'left' | 'center' | 'right';
 
 /** Colour-cycling LED strip colours for the Dham Rajina Xpress. */
 const LED_COLORS = ['#ff2a6d', '#ffd400', '#28ff8c', '#2ad4ff', '#a64dff', '#ff7ae6'];
+/** Landscape garage: the 2x preview starts here; the options panel starts at GARAGE_PANEL_LEFT. */
+export const GARAGE_PREVIEW_X = 4;
+export const GARAGE_PANEL_LEFT = GARAGE_PREVIEW_X + 2 * 74 + 4; // 156
 /** Collect feedback timings (s): body glint, sparkle burst, popups. All under a second. */
 const GLINT_TIME = 0.4;
 const BURST_TIME = 0.45;
@@ -57,7 +61,10 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private cache = new Map<string, HTMLCanvasElement>();
   private textCache = new Map<string, HTMLCanvasElement>();
-  busSkin: keyof typeof BUS_SKINS = 'classic';
+  /** Your bus's look from the garage (the boost look overrides it). */
+  style: BusStyle = { ...DEFAULT_STYLE };
+  /** Garage preview sits on the left in landscape (the options panel covers the right). */
+  garageLeft = false;
   muted = false;
   touchHint = true;
 
@@ -151,6 +158,90 @@ export class Renderer {
       } else {
         const t = this.textImage(this.route, BUS_GLOW[glow], 1, false, FONT_SMALL);
         g.drawImage(t, 55 + Math.floor((19 - t.width) / 2), 1);
+      }
+    });
+  }
+
+  /** Your bus with its garage colour, sign, stickers and static lights baked in (cached). */
+  private playerStatic(glow: number): HTMLCanvasElement {
+    const st = this.style;
+    const key = `player:${st.colour}:${st.sign}:${st.stickers}:${st.lights === 'roof'}:${glow}:${this.route}`;
+    const hit = this.cache.get(key);
+    if (hit) return hit;
+    const glowCol = SIGNS[st.sign].glow[glow];
+    const palKey = `pal:${st.colour}:${glowCol}`;
+    let pal = this.spritePalettes.get(palKey);
+    if (!pal) {
+      pal = { ...PALETTE, ...COLOURS[st.colour].pal, O: glowCol };
+      this.spritePalettes.set(palKey, pal);
+    }
+    const base = this.pixelMap(SPRITES.bus, pal, `pbase:${st.colour}:${glowCol}`);
+    return this.layer(key, base.width, base.height, (g) => {
+      g.drawImage(base, 0, 0);
+      this.rect(55, 0, 19, 6, PALETTE.K, g);
+      if (st.sign !== 'scroll') {
+        const t = this.textImage(this.route, glowCol, 1, false, FONT_SMALL);
+        g.drawImage(t, 55 + Math.floor((19 - t.width) / 2), 1);
+      }
+      this.stickers(g, st.stickers);
+      if (st.lights === 'roof') {
+        const cols = ['#ff3030', '#ffd400', '#30ff60', '#30a0ff'];
+        for (let x = 1; x < 72; x += 3) this.rect(x, 3, 1, 1, cols[(x / 3) % cols.length | 0], g);
+      }
+    });
+  }
+
+  /** Decals on the lower body (clear of the wheel arches and the door). */
+  private stickers(g: CanvasRenderingContext2D, kind: BusStyle['stickers']): void {
+    if (kind === 'stars') {
+      for (const [x, y] of [[4, 19], [26, 19], [36, 20], [69, 19]]) {
+        this.rect(x + 1, y, 1, 3, '#fff060', g);
+        this.rect(x, y + 1, 3, 1, '#fff060', g);
+        this.rect(x + 1, y + 1, 1, 1, '#ffffff', g);
+      }
+    } else if (kind === 'flames') {
+      for (let x = 24; x <= 43; x++) {
+        const hgt = Math.round(2 + 1.5 * Math.sin(x * 0.9) + (43 - x) / 10);
+        this.rect(x, 22 - hgt, 1, hgt, '#ff8c00', g);
+        if (hgt > 2) this.rect(x, 23 - hgt + 1, 1, hgt - 2, '#ffe040', g);
+      }
+    } else if (kind === 'flowers') {
+      for (const [x, y] of [[3, 19], [27, 19], [37, 19], [68, 19]]) {
+        this.rect(x + 1, y, 1, 1, '#ff7ad8', g);
+        this.rect(x, y + 1, 1, 1, '#ff7ad8', g);
+        this.rect(x + 2, y + 1, 1, 1, '#ff7ad8', g);
+        this.rect(x + 1, y + 2, 1, 1, '#ff7ad8', g);
+        this.rect(x + 1, y + 1, 1, 1, '#ffe040', g);
+      }
+    }
+  }
+
+  private scratch2: [HTMLCanvasElement, CanvasRenderingContext2D] | null = null;
+
+  /** Your bus this frame: the static look plus the animated rainbow lights / scrolling sign. */
+  private playerFrame(glow: number, now: number): HTMLCanvasElement {
+    const st = this.style;
+    const base = this.playerStatic(glow);
+    if (st.lights !== 'rainbow' && st.sign !== 'scroll') return base;
+    if (!this.scratch2) this.scratch2 = canvas(base.width, base.height);
+    const [c, g] = this.scratch2;
+    g.clearRect(0, 0, c.width, c.height);
+    g.drawImage(base, 0, 0);
+    if (st.lights === 'rainbow') g.drawImage(this.ledStrip(Math.floor(now * 10) % LED_COLORS.length, base.width), 0, 3);
+    if (st.sign === 'scroll') {
+      const text = this.textImage('LANKAN BUS LEGENDZ * ', SIGNS.scroll.glow[glow], 1, false, FONT_SMALL);
+      const off = Math.floor(now * 18) % text.width;
+      const first = Math.min(17, text.width - off);
+      g.drawImage(text, off, 0, first, 5, 56, 1, first, 5);
+      if (first < 17) g.drawImage(text, 0, 0, 17 - first, 5, 56 + first, 1, 17 - first, 5);
+    }
+    return c;
+  }
+
+  private ledStrip(phase: number, width: number): HTMLCanvasElement {
+    return this.layer(`led:${phase}`, width, 1, (lg) => {
+      for (let x = 0; x < width; x++) {
+        this.rect(x, 0, 1, 1, x % 2 ? '#2a0838' : LED_COLORS[(Math.floor(x / 2) + phase) % LED_COLORS.length], lg);
       }
     });
   }
@@ -251,7 +342,7 @@ export class Renderer {
       ctx.translate(Math.round((Math.random() * 2 - 1) * a), Math.round((Math.random() * 2 - 1) * a));
     }
     this.scene(d);
-    this.entities(game, now, d, busPos);
+    if (game.phase !== 'garage') this.entities(game, now, d, busPos); // garage: empty road behind the preview
     ctx.restore();
     this.lastFill = ''; // restore() reset fillStyle
     if (game.phase === 'crashed' && game.phaseTime < 0.06) this.rect(0, 0, VIEW_W, HUD_TOP, '#fcfcfc');
@@ -470,8 +561,8 @@ export class Renderer {
 
     // Which look: the Dham Rajina Xpress while boosted, flickering back during the transition.
     const c = w.charm;
-    const xpress = c.boostT > 0 || (c.transitionT > 0 && flicker(now) < c.transitionT / TRANSITION_TIME);
-    const img = xpress ? this.xpressFrame(pose.glow, now) : this.busImage(this.busSkin, pose.glow);
+    const xpress = effectiveLook(c, flicker(now), TRANSITION_TIME) === 'xpress';
+    const img = xpress ? this.xpressFrame(pose.glow, now) : this.playerFrame(pose.glow, now);
     // Lucky-charm save: blink while invincible.
     const blink = c.invincibleT > 0 && c.boostT === 0 && c.transitionT === 0 && Math.floor(now * 10) % 2 === 0;
     if (blink) this.ctx.globalAlpha = 0.3;
@@ -907,7 +998,7 @@ export class Renderer {
     this.text(String(Math.min(99999, game.highScore)), HUD.score.x + 3, HUD_TOP + 18, SCENE.lcdOn, 1, 'left', false);
     this.lcdBig(String(Math.min(99999, w.score)).padStart(HUD.scoreDigits.n, ' '), HUD.scoreDigits.x, HUD.scoreDigits.y);
     this.charmIcon(game, now, HUD.charmIcon.x, HUD.charmIcon.y);
-    const kmh = Math.round(w.crashed || game.phase === 'title' ? 0 : w.speed * KMH_PER_SPEED);
+    const kmh = Math.round(w.crashed || game.phase === 'title' || game.phase === 'garage' ? 0 : w.speed * KMH_PER_SPEED);
     this.lcdBig(String(Math.min(999, kmh)).padStart(HUD.speedDigits.n, ' '), HUD.speedDigits.x, HUD.speedDigits.y);
   }
 
@@ -994,6 +1085,25 @@ export class Renderer {
           mid, 83, SCENE.skyLow, 1, 'center',
         );
         this.text(MUSIC_CREDIT, mid, 98, PALETTE.V, 1, 'center');
+        this.button(UI_RECTS.garage, 'GARAGE', '#7a1aa8', 1, true);
+        break;
+      }
+      case 'garage': {
+        this.dim();
+        // 2x preview of your bus (left half in landscape, where the options panel isn't).
+        const glow = (Math.imul(Math.floor(now * 12), 2654435761) >>> 0) % 4;
+        const img = this.playerFrame(glow, now);
+        const pw = img.width * 2;
+        const px = this.garageLeft ? GARAGE_PREVIEW_X : Math.round((VIEW_W - pw) / 2);
+        const py = 26;
+        const title = this.textImage('GARAGE', SCENE.title, 2, true, FONT_BIG);
+        this.ctx.drawImage(title, this.garageLeft ? px + Math.round((pw - title.width) / 2) : Math.round((VIEW_W - title.width) / 2), 6);
+        this.ctx.drawImage(img, px, py, pw, img.height * 2);
+        const frame = Math.floor(now * 8) % 4;
+        for (const wx of BUS_WHEELS.xs) {
+          const wi = this.wheelImage(frame);
+          this.ctx.drawImage(wi, px + (wx - BUS_WHEELS.r) * 2, py + (BUS_WHEELS.y - BUS_WHEELS.r) * 2, wi.width * 2, wi.height * 2);
+        }
         break;
       }
       case 'paused':
