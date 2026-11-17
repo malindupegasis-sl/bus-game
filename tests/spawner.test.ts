@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { LANE_COUNT, laneY } from '../src/config';
 import { speedAt } from '../src/game/difficulty';
 import { hasSafePath, occupancy } from '../src/game/fairness';
-import { exitDistance, obstacleLane, obstacleX, type Obstacle } from '../src/game/obstacles';
+import {
+  TUK_MIN_TELL_TIME, TUK_SWERVE_CHANCE, TUK_SWERVE_MIN_X, TUK_TELL_MAX_X, TUK_TELL_TIME,
+  exitDistance, obstacleLane, obstacleX, type Obstacle,
+} from '../src/game/obstacles';
 import { createRng } from '../src/game/rng';
 import { createSpawner, makeObstacle, updateSpawner } from '../src/game/spawner';
 import { World } from '../src/game/world';
@@ -88,12 +91,35 @@ describe('spawner fairness', () => {
   });
 
   it('always leaves a reachable gap: a perfect bot on the real World never crashes', () => {
+    const count = { lorry: 0, tuktuk: 0, bike: 0 };
+    let swerving = 0;
     for (const seed of SEEDS.slice(0, 120)) {
       let maxOnRoad = 0;
-      const w = runBot(seed, 150, (w) => (maxOnRoad = Math.max(maxOnRoad, w.obstacles.length)));
+      const seen = new Set<number>();
+      const w = runBot(seed, 150, (w) => {
+        maxOnRoad = Math.max(maxOnRoad, w.obstacles.length);
+        for (const o of w.obstacles) {
+          if (seen.has(o.id)) continue;
+          seen.add(o.id);
+          count[o.kind]++;
+          if (o.toLane !== o.lane) swerving++;
+        }
+      });
       expect(w.crashed, `seed ${seed} crashed at t=${w.t.toFixed(1)}`).toBe(false);
       expect(maxOnRoad).toBeGreaterThanOrEqual(4);
     }
+    // Spawn mix (v1 was lorry 53.7%, tuk-tuk 22.9%, motorbike 23.3%).
+    const total = count.lorry + count.tuktuk + count.bike;
+    const share = (n: number) => n / total;
+    expect(share(count.bike)).toBeGreaterThan(0.233 * 0.3); // cut by ~60%: 7–11.5%
+    expect(share(count.bike)).toBeLessThan(0.233 * 0.5);
+    expect(share(count.lorry)).toBeGreaterThan(0.57); // ~+7 points each
+    expect(share(count.lorry)).toBeLessThan(0.65);
+    expect(share(count.tuktuk)).toBeGreaterThan(0.26);
+    expect(share(count.tuktuk)).toBeLessThan(0.34);
+    // About half of the tuk-tuks on the road swerve.
+    expect(swerving / count.tuktuk).toBeGreaterThan(0.4);
+    expect(swerving / count.tuktuk).toBeLessThan(0.6);
   });
 
   it('a player who never steers does crash (the road is not trivially empty)', () => {
@@ -140,17 +166,40 @@ describe('spawner fairness', () => {
     }
   });
 
-  it('tuk-tuks swerve exactly one lane, after a tell that is fully on screen', () => {
+  it('tuk-tuks: about half plan one swerve, after a fully visible tell, starting in the right half', () => {
     const rng = createRng(3);
-    for (let n = 0; n < 600; n++) {
-      const speed = 110 + (n % 7) * 20;
-      const o = makeObstacle(1, 'tuktuk', n % 3, 0, speed, rng);
-      expect(Math.abs(o.toLane - o.lane)).toBe(1);
-      expect(o.dTell).toBeLessThan(o.dSwerve);
-      expect(obstacleX(o, o.dTell)).toBeLessThan(256);
-      expect(obstacleX(o, o.dSwerve)).toBeGreaterThan(60);
-      expect(obstacleLane(o, o.dSwerveEnd + 1)).toBe(o.toLane);
-      expect(laneY(obstacleLane(o, 0))).toBe(laneY(o.lane));
+    let planned = 0;
+    let n = 0;
+    for (const speed of [110, 140, 170, 200, 230]) {
+      for (let i = 0; i < 400; i++, n++) {
+        const o = makeObstacle(1, 'tuktuk', i % 3, 0, speed, rng);
+        if (o.toLane === o.lane) {
+          expect(o.dSwerve).toBe(Infinity); // stays in its lane the whole way
+          expect(obstacleLane(o, 1e6)).toBe(o.lane);
+          continue;
+        }
+        planned++;
+        expect(Math.abs(o.toLane - o.lane)).toBe(1); // one lane, once
+        const tell = (o.dSwerve - o.dTell) / speed;
+        expect(tell).toBeGreaterThanOrEqual(TUK_MIN_TELL_TIME - 1e-9);
+        expect(tell).toBeLessThanOrEqual(TUK_TELL_TIME + 1e-9);
+        // The full 0.7s tell whenever it fits on screen.
+        if ((TUK_TELL_MAX_X - TUK_SWERVE_MIN_X) / (speed * o.f) >= TUK_TELL_TIME) expect(tell).toBeCloseTo(TUK_TELL_TIME);
+        expect(obstacleX(o, o.dTell)).toBeLessThanOrEqual(TUK_TELL_MAX_X + 1e-6); // tell fully visible
+        expect(obstacleX(o, o.dSwerve) + 12).toBeGreaterThanOrEqual(128 - 1e-6); // swerve starts in right half
+        expect(obstacleLane(o, o.dSwerveEnd + 1)).toBe(o.toLane);
+        expect(laneY(obstacleLane(o, 0))).toBe(laneY(o.lane));
+      }
+    }
+    expect(planned / n).toBeGreaterThan(TUK_SWERVE_CHANCE - 0.06);
+    expect(planned / n).toBeLessThan(TUK_SWERVE_CHANCE + 0.06);
+  });
+
+  it('the tell is the full 0.7s at the start speed', () => {
+    const rng = createRng(9);
+    for (let i = 0; i < 200; i++) {
+      const o = makeObstacle(1, 'tuktuk', 1, 0, 110, rng);
+      if (o.toLane !== o.lane) expect((o.dSwerve - o.dTell) / 110).toBeCloseTo(0.7);
     }
   });
 });

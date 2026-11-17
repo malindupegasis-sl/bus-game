@@ -44,6 +44,13 @@ describe('difficulty ramp', () => {
     }
   });
 
+  it('v1.1 mix weights: motorbikes cut by 60%, lorries and tuk-tuks take the share', () => {
+    const w = kindWeightsAt(60);
+    expect(w.bike).toBeCloseTo(0.45 * 0.4);
+    expect(w.lorry).toBeGreaterThan(1);
+    expect(w.tuktuk).toBeGreaterThan(w.bike);
+  });
+
   it('introduces tuk-tuks after a short warm-up', () => {
     expect(kindWeightsAt(0).tuktuk).toBe(0);
     expect(kindWeightsAt(60).tuktuk).toBeGreaterThan(0);

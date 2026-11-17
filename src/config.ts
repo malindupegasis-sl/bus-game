@@ -23,8 +23,17 @@ export const DISTANCE_PER_POINT = 8;
 /** Displayed km/h per logical px/s of speed. */
 export const KMH_PER_SPEED = 0.42;
 
-export const GAME_TITLE = 'Bus Game';
+export const GAME_TITLE = 'LANKAN BUS LEGENDZ';
+export const MUSIC_CREDIT = 'Music: Nandana Sihina Gange by Sangeeth Wijesuriya';
 export const SHARE_URL = 'https://malindupegasis-sl.github.io/bus-game/';
+
+/**
+ * Seamless loop points for public/audio/song.mp3 (seconds). Measured with ffmpeg: the file has
+ * 0.70s of silence at the start, the music ends with a short tail around 204s, then ~4s of
+ * silence. Looping 0.70 → 204.0 with a short crossfade avoids a ~4.6s gap. Update these if the
+ * song file is replaced (the end is clamped to the file's real duration).
+ */
+export const SONG_LOOP = { start: 0.7, end: 204.0, crossfade: 0.18 } as const;
 
 /** Music never plays faster than this (applies to the song file and the chiptune). */
 export const MAX_MUSIC_RATE = 1.25;

@@ -1,12 +1,12 @@
 import {
-  BUS_X, HUD_TOP, KMH_PER_SPEED, LANE_CENTER_Y, LANE_HEIGHT, ROAD_BOTTOM, ROAD_TOP, VIEW_H, VIEW_W, laneY,
+  BUS_X, GAME_TITLE, HUD_TOP, MUSIC_CREDIT, KMH_PER_SPEED, LANE_CENTER_Y, LANE_HEIGHT, ROAD_BOTTOM, ROAD_TOP, VIEW_H, VIEW_W, laneY,
 } from '../config';
 import type { Game } from '../game/game';
 import { formatScore } from '../game/score';
 import { KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { UI_RECTS, type Rect } from '../ui-layout';
 import {
-  BUS_SKINS, FONT, FONT_H, FONT_W, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type SpriteName,
+  BUS_SKINS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font, type SpriteName,
 } from './sprites';
 
 type Align = 'left' | 'center' | 'right';
@@ -67,26 +67,40 @@ export class Renderer {
     return this.pixelMap(SPRITES[name], { ...PALETTE, ...BUS_SKINS[skin] }, `${name}:${skin}`);
   }
 
-  textWidth(s: string, scale = 1): number {
-    return s.length ? (s.length * (FONT_W + 1) - 1) * scale : 0;
+  private glyph(font: Font, ch: string) {
+    return font[ch] ?? font[ch.toUpperCase()] ?? font[' '];
   }
 
-  text(s: string, x: number, y: number, color = SCENE.text, scale = 1, align: Align = 'left', shadow = true): void {
+  textWidth(s: string, scale = 1, font: Font = FONT_SMALL): number {
+    let w = 0;
+    for (const ch of s.toUpperCase()) w += this.glyph(font, ch).w + 1;
+    return Math.max(0, w - 1) * scale;
+  }
+
+  text(
+    s: string, x: number, y: number, color = SCENE.text, scale = 1, align: Align = 'left', shadow = true,
+    font: Font = FONT_SMALL,
+  ): void {
     const str = s.toUpperCase();
-    const w = this.textWidth(str, scale);
-    let cx = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
-    if (shadow) this.glyphs(str, cx + scale, y + scale, SCENE.textShadow, scale);
-    this.glyphs(str, cx, y, color, scale);
+    const w = this.textWidth(str, scale, font);
+    const cx = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
+    if (shadow) this.glyphs(str, cx + scale, y + scale, SCENE.textShadow, scale, font);
+    this.glyphs(str, cx, y, color, scale, font);
   }
 
-  private glyphs(s: string, x: number, y: number, color: string, scale: number): void {
+  /** Title text in the 5×7 font. */
+  title(s: string, y: number, scale: number, color = SCENE.title): void {
+    this.text(s, VIEW_W / 2, y, color, scale, 'center', true, FONT_BIG);
+  }
+
+  private glyphs(s: string, x: number, y: number, color: string, scale: number, font: Font): void {
     this.ctx.fillStyle = color;
     for (const ch of s) {
-      const g = FONT[ch] ?? FONT[ch.toUpperCase()] ?? FONT[' '];
-      for (let i = 0; i < FONT_W * FONT_H; i++) {
-        if (g[i]) this.ctx.fillRect(x + (i % FONT_W) * scale, y + Math.floor(i / FONT_W) * scale, scale, scale);
+      const g = this.glyph(font, ch);
+      for (let i = 0; i < g.bits.length; i++) {
+        if (g.bits[i]) this.ctx.fillRect(x + (i % g.w) * scale, y + Math.floor(i / g.w) * scale, scale, scale);
       }
-      x += (FONT_W + 1) * scale;
+      x += (g.w + 1) * scale;
     }
   }
 
@@ -226,18 +240,30 @@ export class Renderer {
 
   private obstacle(o: Obstacle, d: number, lane: number, now: number): void {
     const img = this.sprite(o.kind);
-    let x = Math.round(obstacleX(o, d));
+    const k = KINDS[o.kind];
+    const x = Math.round(obstacleX(o, d));
     let y = Math.round(laneY(lane) + 10 - img.height);
-    if (isTelling(o, d)) {
-      // Tell: nudge toward the target lane and flash the indicators.
+    const telling = isTelling(o, d);
+    if (telling) {
+      // Tell: hop (3px bounces, 4 per second) and lean 1px toward the lane it's about to take.
+      y -= Math.round(3 * Math.abs(Math.sin(now * Math.PI * 4)));
       y += Math.sign(o.toLane - o.lane);
-      x += Math.floor(now * 30) % 2;
     }
     this.ctx.drawImage(img, x, y);
-    if (isTelling(o, d) && Math.floor(now * 14) % 2 === 0) {
-      const k = KINDS[o.kind];
+    if (telling && Math.floor(now * 6) % 2 === 0) {
+      // Big amber blinkers front and back, plus an arrow showing which way it's going.
+      this.rect(x - 2, y + 10, 4, 4, PALETTE.K);
       this.rect(x - 1, y + 11, 3, 3, PALETTE.y);
+      this.rect(x + k.width - 2, y + 10, 4, 4, PALETTE.K);
       this.rect(x + k.width - 2, y + 11, 3, 3, PALETTE.y);
+      const up = o.toLane < o.lane;
+      const ax = x + Math.floor(k.width / 2);
+      const ay = up ? y - 6 : y + img.height + 1;
+      for (let i = 0; i < 3; i++) {
+        const row = up ? ay + i : ay + 2 - i;
+        this.rect(ax - i - 1, row, 2 * i + 3, 1, PALETTE.K);
+        this.rect(ax - i, row, 2 * i + 1, 1, PALETTE.y);
+      }
     }
   }
 
@@ -333,7 +359,7 @@ export class Renderer {
     this.rect(r.x, r.y, r.w, r.h, enabled ? fill : PALETTE.g);
     this.rect(r.x, r.y, r.w, 1, 'rgba(255,255,255,0.45)');
     this.rect(r.x, r.y + r.h - 2, r.w, 2, 'rgba(0,0,0,0.35)');
-    const th = FONT_H * scale;
+    const th = 5 * scale;
     this.text(label, r.x + r.w / 2, r.y + Math.round((r.h - th) / 2) - 1, SCENE.text, scale, 'center');
   }
 
@@ -366,27 +392,29 @@ export class Renderer {
     switch (game.phase) {
       case 'title': {
         this.dim();
-        this.text('BUS GAME', mid, 12, SCENE.title, 3, 'center');
-        this.text(`HIGH SCORE ${formatScore(game.highScore)}`, mid, 38, SCENE.text, 1, 'center');
-        if (blink) this.text('TAP TO START', mid, 54, SCENE.text, 2, 'center');
+        const [l1, l2] = splitTitle(GAME_TITLE);
+        this.title(l1, 5, 3);
+        this.title(l2, 29, 3);
+        this.text(`HIGH SCORE ${formatScore(game.highScore)}`, mid, 55, SCENE.text, 1, 'center');
+        if (blink) this.text('TAP TO START', mid, 65, SCENE.text, 2, 'center');
         this.text(
-          this.touchHint ? 'TAP OR SWIPE UP/DOWN TO CHANGE LANE' : 'UP/DOWN ARROWS OR W/S TO CHANGE LANE',
-          mid, 78, SCENE.skyLow, 1, 'center',
+          this.touchHint ? 'SWIPE OR TAP THE ARROWS TO CHANGE LANE' : 'UP/DOWN ARROWS OR W/S TO CHANGE LANE',
+          mid, 83, SCENE.skyLow, 1, 'center',
         );
-        this.text('DODGE THE TRAFFIC!', mid, 90, PALETTE.V, 1, 'center');
+        this.text(MUSIC_CREDIT, mid, 98, PALETTE.V, 1, 'center');
         break;
       }
       case 'paused':
         this.dim();
-        this.text('PAUSED', mid, 26, SCENE.title, 3, 'center');
+        this.title('PAUSED', 24, 3);
         if (blink) this.text('TAP TO RESUME', mid, 60, SCENE.text, 2, 'center');
         break;
       case 'over': {
         this.dim();
-        this.text('GAME OVER', mid, 8, SCENE.title, 3, 'center');
-        this.text(`SCORE ${formatScore(game.world.score)}`, mid, 32, SCENE.text, 2, 'center');
-        this.text(`HIGH SCORE ${formatScore(game.highScore)}`, mid, 50, SCENE.text, 1, 'center');
-        if (game.newBest && blink) this.text('NEW BEST!', mid, 61, PALETTE.y, 1, 'center');
+        this.title('GAME OVER', 7, 3);
+        this.text(`SCORE ${formatScore(game.world.score)}`, mid, 34, SCENE.text, 2, 'center');
+        this.text(`HIGH SCORE ${formatScore(game.highScore)}`, mid, 51, SCENE.text, 1, 'center');
+        if (game.newBest && blink) this.text('NEW BEST!', mid, 62, PALETTE.y, 1, 'center');
         const ok = game.canRetry();
         this.button(UI_RECTS.retry, 'RETRY', '#e45c10', 2, ok);
         this.button(UI_RECTS.share, 'SHARE ON WHATSAPP', '#00a844', 1, ok);
@@ -395,4 +423,18 @@ export class Renderer {
     }
     if (game.phase !== 'crashed') this.muteIcon(this.muted);
   }
+}
+
+/** Split a title into two lines at the space nearest the middle. */
+export function splitTitle(t: string): [string, string] {
+  const words = t.split(' ');
+  let best: [string, string] = [t, ''];
+  let bestDiff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' ');
+    const b = words.slice(i).join(' ');
+    const diff = Math.abs(a.length - b.length);
+    if (diff < bestDiff) [best, bestDiff] = [[a, b], diff];
+  }
+  return best;
 }

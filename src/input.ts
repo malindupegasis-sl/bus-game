@@ -1,10 +1,12 @@
 import type { Dir } from './game/game';
 
 export interface InputHandlers {
-  /** Tap (fires on touch-down for zero latency) or key press. */
-  press(dir: Dir, gestureId?: number): void;
-  /** The same gesture turned into a vertical swipe. */
-  swipe(dir: Dir, gestureId: number): void;
+  /** ▲/▼ button (fires on touch-down for zero latency) or arrow key. */
+  press(dir: Dir): void;
+  /** Vertical swipe anywhere outside the buttons. */
+  swipe(dir: Dir): void;
+  /** Tap anywhere outside the buttons (start / resume, never steers). */
+  tap(): void;
   /** Enter / Space. */
   primary(): void;
   toggleMute(): void;
@@ -15,12 +17,24 @@ export interface InputHandlers {
 const isUi = (t: EventTarget | null) => t instanceof Element && !!t.closest('button, a');
 
 /**
- * Phone: tap the top or bottom half of the screen, or swipe up/down (both work).
+ * Phone: the ▲ (bottom-left) and ▼ (bottom-right) buttons, or swipe up/down anywhere.
  * Desktop: ↑/↓ or W/S. Also blocks scrolling, zooming, text selection and the context menu.
  */
-export function attachInput(h: InputHandlers): void {
-  let nextGesture = 0;
-  const active = new Map<number, { x: number; y: number; id: number; swiped: boolean }>();
+export function attachInput(h: InputHandlers, buttons: { el: HTMLElement; dir: Dir }[]): void {
+  for (const { el, dir } of buttons) {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.add('pressed');
+      h.unlock();
+      h.press(dir);
+    });
+    const release = () => el.classList.remove('pressed');
+    for (const type of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(type, release);
+    el.addEventListener('click', (e) => e.preventDefault());
+  }
+
+  const active = new Map<number, { x: number; y: number; swiped: boolean }>();
 
   window.addEventListener(
     'pointerdown',
@@ -28,10 +42,9 @@ export function attachInput(h: InputHandlers): void {
       if (isUi(e.target)) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault();
-      const id = ++nextGesture;
-      active.set(e.pointerId, { x: e.clientX, y: e.clientY, id, swiped: false });
+      active.set(e.pointerId, { x: e.clientX, y: e.clientY, swiped: false });
       h.unlock();
-      h.press(e.clientY < window.innerHeight / 2 ? -1 : 1, id);
+      h.tap();
     },
     { passive: false },
   );
@@ -44,7 +57,7 @@ export function attachInput(h: InputHandlers): void {
     const threshold = Math.max(16, Math.min(36, window.innerHeight * 0.03));
     if (Math.abs(dy) >= threshold && Math.abs(dy) > Math.abs(dx) * 1.2) {
       g.swiped = true;
-      h.swipe(dy < 0 ? -1 : 1, g.id);
+      h.swipe(dy < 0 ? -1 : 1);
     }
   });
 
@@ -59,7 +72,8 @@ export function attachInput(h: InputHandlers): void {
 
   // No scrolling / pinch-zoom / double-tap zoom / long-press menus while playing.
   const block = (e: Event) => {
-    if (!isUi(e.target)) e.preventDefault();
+    const t = e.target;
+    if (!(t instanceof Element && t.closest('a, #btn-retry, #btn-mute'))) e.preventDefault();
   };
   for (const type of ['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'dblclick', 'contextmenu', 'selectstart']) {
     document.addEventListener(type, block, { passive: false });

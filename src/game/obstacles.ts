@@ -26,8 +26,8 @@ export interface KindSpec {
 export const KINDS: Record<ObstacleKind, KindSpec> = {
   // Oncoming, fast and straight.
   lorry: { width: 46, height: 22, hitX0: 3, hitX1: 43, halfH: 7, speedFactor: [1.6, 1.85] },
-  // Oncoming, swerves one lane partway across.
-  tuktuk: { width: 24, height: 20, hitX0: 3, hitX1: 21, halfH: 6, speedFactor: [1.3, 1.45] },
+  // Oncoming. About half swerve one lane, once, in the right half of the screen, after a long tell.
+  tuktuk: { width: 24, height: 20, hitX0: 3, hitX1: 21, halfH: 6, speedFactor: [1.15, 1.3] },
   // Same direction as the bus, so it closes slowly and blocks a lane for longer.
   bike: { width: 34, height: 26, hitX0: 4, hitX1: 30, halfH: 6, speedFactor: [0.42, 0.5] },
 };
@@ -36,9 +36,22 @@ export const KINDS: Record<ObstacleKind, KindSpec> = {
 export const BUS_HIT = { x0: 4, x1: 44, halfH: 7 } as const;
 export const BUS_SPRITE_W = 48;
 
-/** Tuk-tuk swerve timing (seconds at the speed it spawned at). */
-export const TUK_TELL_TIME = 0.4;
+/** Tuk-tuk swerve rules (seconds are at the speed it spawned at). */
+export const TUK_TELL_TIME = 0.7; // blinker + hop before the swerve
+/**
+ * At high speed a tuk-tuk crosses the screen in well under a second, so a fully visible 0.7s tell
+ * plus a right-half swerve doesn't fit. The tell then shortens to what fits, but never below this (0.42s fits every tuk-tuk at top speed);
+ * if even this doesn't fit, that tuk-tuk stays in its lane.
+ */
+export const TUK_MIN_TELL_TIME = 0.42;
 export const TUK_SWERVE_TIME = 0.28;
+/** Chance a new tuk-tuk plans a swerve. 0.6 because the fairness check rejects swerving tuk-tuks
+ *  more often (they occupy two lanes); the share that actually swerves on the road is ~50%. */
+export const TUK_SWERVE_CHANCE = 0.6;
+/** The tell only starts once at least half the tuk-tuk is on screen (sprite-left x). */
+export const TUK_TELL_MAX_X = 256 - 12;
+/** The swerve must start while the tuk-tuk's centre is still in the right half (sprite-left x). */
+export const TUK_SWERVE_MIN_X = 128 - 12;
 
 export interface Obstacle {
   id: number;

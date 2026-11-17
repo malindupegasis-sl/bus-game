@@ -74,7 +74,7 @@ import { Game } from '../src/game/game';
 
 describe('share + game over', () => {
   it('builds a wa.me link with the formatted score and live link', () => {
-    expect(shareText(1240)).toBe('I scored 1,240 in Bus Game! Beat me: https://malindupegasis-sl.github.io/bus-game/');
+    expect(shareText(1240)).toBe('I scored 1,240 in LANKAN BUS LEGENDZ! Beat me: https://malindupegasis-sl.github.io/bus-game/');
     const url = whatsappUrl(1240);
     expect(url.startsWith('https://wa.me/?text=')).toBe(true);
     expect(decodeURIComponent(url.split('text=')[1])).toBe(shareText(1240));
@@ -97,19 +97,27 @@ describe('share + game over', () => {
     expect(g.world.score).toBe(0);
   });
 
-  it('a swipe against the tap direction wins, from the pre-tap lane', () => {
+  it('buttons and swipes steer; a plain tap never steers', () => {
     const g = new Game(0, 5);
-    g.start();
+    expect(g.tap()).toBe('start');
     expect(g.world.bus.target).toBe(1);
-    g.press(-1, 1); // tap top half → up
+    expect(g.tap()).toBe('none');
+    expect(g.world.bus.target).toBe(1);
+    expect(g.press(-1)).toBe('move');
     expect(g.world.bus.target).toBe(0);
-    g.swipe(1, 1); // ...but the finger swiped down
+    expect(g.press(-1)).toBe('none'); // already in the top lane
+    expect(g.swipe(1)).toBe(true);
+    expect(g.swipe(1)).toBe(true);
     expect(g.world.bus.target).toBe(2);
-    g.swipe(1, 1); // repeated swipe events in the same gesture do nothing more
-    expect(g.world.bus.target).toBe(2);
-    g.press(1, 2);
-    g.swipe(1, 2); // swipe in the same direction as the tap: just one move
-    expect(g.world.bus.target).toBe(2);
+  });
+
+  it('the arrow buttons also start the game and resume from pause', () => {
+    const g = new Game(0, 5);
+    expect(g.press(1)).toBe('start');
+    expect(g.world.bus.target).toBe(1); // the starting press doesn't steer
+    g.pause();
+    expect(g.press(-1)).toBe('resume');
+    expect(g.world.bus.target).toBe(1);
   });
 
   it('pauses and resumes', () => {

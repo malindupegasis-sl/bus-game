@@ -1,2 +1,4 @@
-Drop the game song here as `song.mp3`. The game detects it automatically and uses it instead of
-the built-in chiptune placeholder (it still speeds up with the game, capped at 1.25x, pitch kept).
+`song.mp3`: *Nandana Sihina Gange* by Sangeeth Wijesuriya.
+
+The game loops it between the points in `SONG_LOOP` (`src/config.ts`). If you replace the file,
+re-measure them, e.g. with `ffmpeg -i song.mp3 -af silencedetect=noise=-50dB:d=0.05 -f null -`.

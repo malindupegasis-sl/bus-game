@@ -1,7 +1,10 @@
-import { LANE_COUNT, SPAWN_X, VIEW_W } from '../config';
+import { LANE_COUNT, SPAWN_X } from '../config';
 import { kindWeightsAt, maxObstaclesAt, spawnGapAt, speedAt } from './difficulty';
 import { lanesWithPath, occupancy, screenConflict, type Interval } from './fairness';
-import { TUK_SWERVE_TIME, TUK_TELL_TIME, KINDS, type Obstacle, type ObstacleKind } from './obstacles';
+import {
+  KINDS, TUK_MIN_TELL_TIME, TUK_SWERVE_CHANCE, TUK_SWERVE_MIN_X, TUK_SWERVE_TIME, TUK_TELL_MAX_X, TUK_TELL_TIME,
+  type Obstacle, type ObstacleKind,
+} from './obstacles';
 import { randInt, randRange, type Rng } from './rng';
 
 export interface SpawnerState {
@@ -43,15 +46,19 @@ export function makeObstacle(
     id, kind, d0: d, x0: SPAWN_X, f, lane, toLane: lane,
     dTell: Infinity, dSwerve: Infinity, dSwerveEnd: Infinity,
   };
-  if (kind === 'tuktuk') {
-    o.toLane = lane === 0 ? 1 : lane === LANE_COUNT - 1 ? lane - 1 : lane + (rng() < 0.5 ? -1 : 1);
-    // Swerve somewhere mid-screen, late enough that the whole tell is visible on screen.
-    const tellPx = TUK_TELL_TIME * speed * f;
-    const maxX = Math.max(0.42 * VIEW_W, Math.min(0.82 * VIEW_W, VIEW_W - 12 - tellPx));
-    const swerveX = randRange(rng, 0.4 * VIEW_W, maxX);
-    o.dSwerve = d + (SPAWN_X - swerveX) / f;
-    o.dTell = o.dSwerve - TUK_TELL_TIME * speed;
-    o.dSwerveEnd = o.dSwerve + TUK_SWERVE_TIME * speed;
+  if (kind === 'tuktuk' && rng() < TUK_SWERVE_CHANCE) {
+    // Swerve once: the whole tell must be visible, and the swerve must start in the right half.
+    // The tell is 0.7s when it fits and shortens (to no less than 0.42s) only when it must.
+    const room = TUK_TELL_MAX_X - TUK_SWERVE_MIN_X; // screen px available for the tell
+    const tellTime = Math.min(TUK_TELL_TIME, room / (speed * f));
+    if (tellTime >= TUK_MIN_TELL_TIME) {
+      const maxX = TUK_TELL_MAX_X - tellTime * speed * f;
+      o.toLane = lane === 0 ? 1 : lane === LANE_COUNT - 1 ? lane - 1 : lane + (rng() < 0.5 ? -1 : 1);
+      const swerveX = randRange(rng, TUK_SWERVE_MIN_X, maxX);
+      o.dSwerve = d + (SPAWN_X - swerveX) / f;
+      o.dTell = o.dSwerve - tellTime * speed;
+      o.dSwerveEnd = o.dSwerve + TUK_SWERVE_TIME * speed;
+    }
   }
   return o;
 }

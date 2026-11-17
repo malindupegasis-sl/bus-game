@@ -44,10 +44,18 @@ export function maxObstaclesAt(t: number): number {
   return Math.round(lerp(d.maxObstaclesStart, d.maxObstaclesEnd, clamp01(t / d.denseTime)));
 }
 
-/** Relative spawn weights for each obstacle kind. */
+/**
+ * Relative spawn weights. Calibrated against what actually spawns (the fairness check rejects
+ * some candidates), measured with a perfect bot over 60 runs of 150s:
+ *   v1:   lorry 53.7%, tuk-tuk 22.9%, motorbike 23.3%
+ *   v1.1: lorry 61.7%, tuk-tuk 29.1%, motorbike  9.2%  (motorbikes −60%, freed share split evenly)
+ * tests/spawner.test.ts checks the mix stays near these numbers.
+ */
+export const KIND_WEIGHTS = { lorry: 1.4, tuktuk: 0.75, bike: 0.18 } as const;
+
 export function kindWeightsAt(t: number): Record<ObstacleKind, number> {
-  const tuk = t < DIFFICULTY.tuktukFrom ? 0 : 0.9 * clamp01((t - DIFFICULTY.tuktukFrom) / 20);
-  return { lorry: 1, tuktuk: tuk, bike: 0.45 };
+  const tuk = t < DIFFICULTY.tuktukFrom ? 0 : KIND_WEIGHTS.tuktuk * clamp01((t - DIFFICULTY.tuktukFrom) / 20);
+  return { lorry: KIND_WEIGHTS.lorry, tuktuk: tuk, bike: KIND_WEIGHTS.bike };
 }
 
 /** Music playback rate for a given game speed, capped at MAX_MUSIC_RATE. */

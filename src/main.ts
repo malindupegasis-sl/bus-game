@@ -6,6 +6,7 @@ import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
 import { Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
+import { computeLayout, type Box } from './layout';
 import { UI_RECTS, type Rect } from './ui-layout';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -13,8 +14,8 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as
 const stage = $<HTMLDivElement>('#stage');
 const wrap = $<HTMLDivElement>('#wrap');
 const canvas = $<HTMLCanvasElement>('#screen');
-const padUp = $<HTMLDivElement>('#pad-up');
-const padDown = $<HTMLDivElement>('#pad-down');
+const btnUp = $<HTMLButtonElement>('#btn-up');
+const btnDown = $<HTMLButtonElement>('#btn-down');
 const btnMute = $<HTMLButtonElement>('#btn-mute');
 const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
@@ -27,27 +28,24 @@ renderer.muted = audio.muted;
 
 // ------------------------------------------------------------ layout
 
-/** Scale the 256×144 canvas by the largest whole number of *device* pixels that fits. */
+function setBox(el: HTMLElement, b: Box): void {
+  el.style.left = `${b.x}px`;
+  el.style.top = `${b.y}px`;
+  el.style.width = `${b.w}px`;
+  el.style.height = `${b.h}px`;
+}
+
 function layout(): void {
   const cs = getComputedStyle(stage);
-  const availW = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const availH = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  const dpr = window.devicePixelRatio || 1;
-  const k = Math.max(1, Math.floor(Math.min((availW * dpr) / VIEW_W, (availH * dpr) / VIEW_H)));
-  let cssW = (VIEW_W * k) / dpr;
-  let cssH = (VIEW_H * k) / dpr;
-  // If whole-number scaling leaves the game tiny (e.g. dpr 1 phones), fill the width instead.
-  if (cssW < availW * 0.8 && availW / VIEW_W < availH / VIEW_H) {
-    cssW = availW;
-    cssH = (availW * VIEW_H) / VIEW_W;
-  }
-  canvas.style.width = `${cssW}px`;
-  canvas.style.height = `${cssH}px`;
-  wrap.style.width = `${cssW}px`;
-  wrap.style.height = `${cssH}px`;
-  // Portrait: show the ▲ / ▼ pads in the free space above and below the game.
-  const free = (availH - cssH) / 2;
-  stage.classList.toggle('with-pads', free >= 64);
+  const w = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const h = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const l = computeLayout(w, h, window.devicePixelRatio || 1);
+  setBox(wrap, l.canvas);
+  canvas.style.width = `${l.canvas.w}px`;
+  canvas.style.height = `${l.canvas.h}px`;
+  setBox(btnUp, l.up);
+  setBox(btnDown, l.down);
+  stage.dataset.controls = l.mode;
 }
 
 function place(el: HTMLElement, r: Rect, grow = 0): void {
@@ -63,8 +61,6 @@ place(btnShare, UI_RECTS.share);
 window.addEventListener('resize', layout);
 window.visualViewport?.addEventListener('resize', layout);
 layout();
-void padUp;
-void padDown;
 
 // ------------------------------------------------------------ input + audio
 
@@ -90,25 +86,36 @@ function toggleMute(): void {
   btnMute.setAttribute('aria-label', audio.muted ? 'Unmute' : 'Mute');
 }
 
-attachInput({
-  press(dir, gid) {
-    const r = game.press(dir, gid);
-    if (r === 'start') onRunStart();
-    else if (r === 'resume') audio.resumeAll();
-    flushEvents();
+attachInput(
+  {
+    press(dir) {
+      const r = game.press(dir);
+      if (r === 'start') onRunStart();
+      else if (r === 'resume') audio.resumeAll();
+      flushEvents();
+    },
+    swipe(dir) {
+      game.swipe(dir);
+      flushEvents();
+    },
+    tap() {
+      const r = game.tap();
+      if (r === 'start') onRunStart();
+      else if (r === 'resume') audio.resumeAll();
+    },
+    primary() {
+      const r = game.primary();
+      if (r === 'start' || r === 'retry') onRunStart();
+      else if (r === 'resume') audio.resumeAll();
+    },
+    toggleMute,
+    unlock: () => audio.unlock(),
   },
-  swipe(dir, gid) {
-    game.swipe(dir, gid);
-    flushEvents();
-  },
-  primary() {
-    const r = game.primary();
-    if (r === 'start' || r === 'retry') onRunStart();
-    else if (r === 'resume') audio.resumeAll();
-  },
-  toggleMute,
-  unlock: () => audio.unlock(),
-});
+  [
+    { el: btnUp, dir: -1 },
+    { el: btnDown, dir: 1 },
+  ],
+);
 
 btnMute.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -186,6 +193,7 @@ const hook: Record<string, unknown> = {
     highScore: game.highScore,
     obstacles: game.world.obstacles.length,
     audio: audio.source,
+    song: audio.songState,
     muted: audio.muted,
   }),
 };

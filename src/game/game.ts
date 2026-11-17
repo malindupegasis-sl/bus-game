@@ -10,9 +10,8 @@ export const CRASH_TIME = 0.9;
 export const RETRY_DELAY = 0.5;
 
 /**
- * Game state machine. A tap fires immediately on touch-down (in the half of the screen that was
- * touched). If the same gesture then turns into a swipe the other way, the swipe wins: the bus
- * is re-targeted from where it was before the tap, so a swipe never fights the tap.
+ * Game state machine. Steering comes from the on-screen ▲/▼ buttons, swipes, or keys. A plain tap
+ * anywhere else only starts the game or resumes it; it never steers.
  */
 export class Game {
   phase: Phase = 'title';
@@ -21,7 +20,6 @@ export class Game {
   newBest = false;
   /** Seconds since the phase last changed (blinking text, delays). */
   phaseTime = 0;
-  private gesture: { id: number; base: number; dir: Dir } | null = null;
 
   constructor(highScore = loadHighScore(), seed?: number) {
     this.highScore = highScore;
@@ -36,12 +34,11 @@ export class Game {
   start(seed?: number): void {
     this.world = new World(seed);
     this.newBest = false;
-    this.gesture = null;
     this.setPhase('playing');
   }
 
-  /** Tap / key press. Returns what it did so the caller can react (audio etc.). */
-  press(dir: Dir, gestureId?: number): 'start' | 'resume' | 'move' | 'none' {
+  /** ▲/▼ button or arrow key. Also starts / resumes, so the buttons work on every screen. */
+  press(dir: Dir): 'start' | 'resume' | 'move' | 'none' {
     switch (this.phase) {
       case 'title':
         this.start();
@@ -49,21 +46,23 @@ export class Game {
       case 'paused':
         this.resume();
         return 'resume';
-      case 'playing': {
-        const base = this.world.bus.target;
-        this.gesture = gestureId === undefined ? null : { id: gestureId, base, dir };
+      case 'playing':
         return this.world.move(dir) ? 'move' : 'none';
-      }
       default:
         return 'none';
     }
   }
 
-  swipe(dir: Dir, gestureId: number): void {
-    const g = this.gesture;
-    if (this.phase !== 'playing' || !g || g.id !== gestureId || g.dir === dir) return;
-    g.dir = dir;
-    this.world.setBusTarget(g.base + dir);
+  /** Vertical swipe: steers while playing. */
+  swipe(dir: Dir): boolean {
+    return this.phase === 'playing' && this.world.move(dir);
+  }
+
+  /** Tap on the screen (not a button): start or resume only. */
+  tap(): 'start' | 'resume' | 'none' {
+    if (this.phase === 'title') return this.start(), 'start';
+    if (this.phase === 'paused') return this.resume(), 'resume';
+    return 'none';
   }
 
   /** Enter/Space: start, resume, or retry. */
@@ -86,7 +85,6 @@ export class Game {
 
   pause(): boolean {
     if (this.phase !== 'playing') return false;
-    this.gesture = null;
     this.setPhase('paused');
     return true;
   }

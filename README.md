@@ -1,4 +1,4 @@
-# Bus Game
+# LANKAN BUS LEGENDZ
 
 A mobile-first 8-bit browser game: drive a Sri Lankan bus down a three-lane highway and dodge the
 oncoming traffic. Plain TypeScript and HTML canvas with Vite, and no game engine.
@@ -7,7 +7,8 @@ oncoming traffic. Plain TypeScript and HTML canvas with Vite, and no game engine
 
 ## Controls
 
-- **Phone:** tap the top or bottom half of the screen, or swipe up or down.
+- **Phone:** the big ▲ (bottom-left) and ▼ (bottom-right) thumb buttons, or swipe up or down
+  anywhere. Tapping the game itself only starts or resumes.
 - **Desktop:** ↑/↓ or W/S. Enter or Space starts and retries, and M mutes.
 
 ## Develop
@@ -25,9 +26,14 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 
 ## Music
 
-Put a song at `public/audio/song.mp3` and the game uses it automatically. Without one, it plays a
-built-in Web Audio chiptune. Either way the music speeds up with the game, capped at 1.25x, and the
-song keeps its pitch. Audio only starts after the first tap.
+Music: *Nandana Sihina Gange* by Sangeeth Wijesuriya (`public/audio/song.mp3`).
+
+- The song loops seamlessly between `SONG_LOOP.start` and `SONG_LOOP.end` in `src/config.ts`
+  (0.70s → 204.0s, measured with ffmpeg; the file has silence at both ends), with a short crossfade
+  between two `<audio>` copies. **If you replace the song, re-measure these.**
+- It speeds up with the game, capped at 1.25x, with pitch preserved.
+- If the file is missing or fails to load, the built-in Web Audio chiptune plays instead.
+- Audio only starts after the first tap.
 
 ## Code map
 
@@ -39,10 +45,11 @@ song keeps its pitch. Audio only starts after the first tap.
 | `src/game/fairness.ts` | Lane-occupancy model and the "is there still a way through?" search |
 | `src/game/spawner.ts` | Seeded spawner; rejects any spawn that would close the last gap |
 | `src/game/world.ts` | One run: movement, collisions, events (no DOM) |
-| `src/game/game.ts` | Title / playing / paused / crashed / over state machine, tap and swipe rules |
+| `src/game/game.ts` | Title / playing / paused / crashed / over state machine; buttons, swipes, taps |
 | `src/render/sprites.ts` | **All** sprites, palettes, bus skins, and the pixel font |
 | `src/render/renderer.ts` | Road, parallax, entities, HUD, screens |
-| `src/audio/` | Chiptune sequencer, sound effects, song-file switch, mute |
+| `src/audio/` | Song playback and seamless loop, chiptune fallback, sound effects, mute |
+| `src/layout.ts` | Canvas scaling and ▲/▼ thumb-button placement (never over the bus) |
 
 ### Fairness
 
