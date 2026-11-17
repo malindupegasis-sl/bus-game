@@ -1,15 +1,14 @@
 import './style.css';
 import { AudioManager } from './audio/audio';
-import { VIEW_H, VIEW_W } from './config';
+import { MUSIC_CREDIT, VIEW_H, VIEW_W } from './config';
 import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
-import { GARAGE_PANEL_LEFT, Renderer } from './render/renderer';
+import { Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
-import { ROUTES, loadRoute, nextRoute, saveRoute, type RouteId } from './game/routes';
-import { FIELD_LABELS, cycle, loadStyle, optionName, saveStyle, type BusStyle, type StyleField } from './game/garage';
+import { creditFontPx, visibleArea } from './viewport';
 import { HUD, UI_RECTS, type Rect } from './ui-layout';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
@@ -22,30 +21,15 @@ const btnDown = $<HTMLButtonElement>('#btn-down');
 const btnMute = $<HTMLButtonElement>('#btn-mute');
 const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
-const btnGarage = $<HTMLButtonElement>('#btn-garage');
-const btnRoute = $<HTMLButtonElement>('#btn-route');
-const garagePanel = $<HTMLDivElement>('#garage');
-const garageRows = $<HTMLDivElement>('#garage-rows');
-const garageDone = $<HTMLButtonElement>('#garage-done');
+const credit = $<HTMLParagraphElement>('#credit');
+credit.textContent = MUSIC_CREDIT;
 
 const renderer = new Renderer(canvas);
-let busStyle: BusStyle = loadStyle();
-renderer.style = busStyle;
-
-/** Route: scenery theme, sign-board number and the title button label. */
-function applyRoute(r: RouteId): void {
-  renderer.route = ROUTES[r].number;
-  renderer.theme = ROUTES[r].theme;
-  renderer.routeButton = ROUTES[r].button;
-}
-let route: RouteId = loadRoute();
-applyRoute(route);
-const game = new Game(undefined, undefined, route);
+const game = new Game();
 const audio = new AudioManager();
-renderer.touchHint = window.matchMedia('(pointer: coarse)').matches;
 renderer.muted = audio.muted;
 
-// ------------------------------------------------------------ layout
+// ------------------------------------------------------------ layout (rotation-safe)
 
 function setBox(el: HTMLElement, b: Box): void {
   el.style.left = `${b.x}px`;
@@ -54,10 +38,25 @@ function setBox(el: HTMLElement, b: Box): void {
   el.style.height = `${b.h}px`;
 }
 
+/** Size the layout was last computed for (to detect missed rotation/resize events). */
+let laidOut = { w: 0, h: 0 };
+
+/**
+ * Lay everything out for the real visible area. On iPhone (Safari and Chrome both use WebKit)
+ * the toolbars change size when rotating and the old size is briefly reported mid-rotation, so
+ * this runs on every resize-type event, again a few times after a rotation, and whenever the
+ * main loop notices the visible area changed.
+ */
 function layout(): void {
+  const v = visibleArea(window);
+  if (v.zoomed) resetZoom();
+  stage.style.left = `${v.left}px`;
+  stage.style.top = `${v.top}px`;
+  stage.style.width = `${v.w}px`;
+  stage.style.height = `${v.h}px`;
   const cs = getComputedStyle(stage);
-  const w = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const h = stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const w = v.w - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const h = v.h - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
   const l = computeLayout(w, h, window.devicePixelRatio || 1);
   setBox(wrap, l.canvas);
   canvas.style.width = `${l.canvas.w}px`;
@@ -65,18 +64,37 @@ function layout(): void {
   setBox(btnUp, l.up);
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
-  document.body.dataset.controls = l.mode;
-  renderer.garageLeft = l.mode === 'overlay';
-  // Landscape garage: the panel starts just right of the 2x bus preview.
-  if (l.mode === 'overlay') {
-    const left = l.canvas.x + GARAGE_PANEL_LEFT * (l.canvas.w / VIEW_W) + parseFloat(cs.paddingLeft);
-    const width = Math.max(220, window.innerWidth - parseFloat(cs.paddingRight) - 12 - left);
-    garagePanel.style.width = `${width}px`;
-    garagePanel.classList.toggle('narrow', width < 300); // stack label above ◀ value ▶
-  } else {
-    garagePanel.style.width = '';
-    garagePanel.classList.remove('narrow');
-  }
+  credit.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W)}px`;
+  laidOut = { w: v.w, h: v.h };
+}
+
+/** If the page somehow got zoomed (it shouldn't), re-apply the viewport tag to snap back to 1x. */
+function resetZoom(): void {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+  if (!meta) return;
+  const content = meta.content;
+  meta.content = `${content}, maximum-scale=1.0`;
+  requestAnimationFrame(() => (meta.content = content));
+}
+
+let layoutQueued = false;
+function scheduleLayout(): void {
+  if (layoutQueued) return;
+  layoutQueued = true;
+  requestAnimationFrame(() => {
+    layoutQueued = false;
+    layout();
+  });
+}
+
+/**
+ * After a rotation iOS can report the old size for a moment, and animation frames can be held back
+ * while it animates the turn, so lay out right away (not on the next frame) and check again a few
+ * times on timers. layout() is cheap.
+ */
+function afterRotation(): void {
+  layout();
+  for (const ms of [100, 300, 600, 1000]) setTimeout(layout, ms);
 }
 
 function place(el: HTMLElement, r: Rect, grow = 0): void {
@@ -88,12 +106,19 @@ function place(el: HTMLElement, r: Rect, grow = 0): void {
 place(btnMute, UI_RECTS.mute, 6);
 place(btnRetry, UI_RECTS.retry);
 place(btnShare, UI_RECTS.share);
-place(btnGarage, UI_RECTS.garage, 4);
-place(btnRoute, UI_RECTS.route, 4);
 
-window.addEventListener('resize', layout);
-window.visualViewport?.addEventListener('resize', layout);
+window.addEventListener('resize', afterRotation);
+window.addEventListener('orientationchange', afterRotation);
+screen.orientation?.addEventListener?.('change', afterRotation);
+window.visualViewport?.addEventListener('resize', afterRotation);
+window.visualViewport?.addEventListener('scroll', scheduleLayout);
+if ('ResizeObserver' in window) new ResizeObserver(scheduleLayout).observe(document.documentElement);
 layout();
+// Safety net that doesn't depend on animation frames: re-layout if the visible area changed.
+setInterval(() => {
+  const v = visibleArea(window);
+  if (Math.abs(v.w - laidOut.w) > 1 || Math.abs(v.h - laidOut.h) > 1) layout();
+}, 400);
 
 // ------------------------------------------------------------ debug overlay
 
@@ -180,70 +205,6 @@ attachInput(
   ],
 );
 
-// ------------------------------------------------------------ garage
-
-const valueEls = new Map<StyleField, HTMLElement>();
-for (const field of Object.keys(FIELD_LABELS) as StyleField[]) {
-  const row = document.createElement('div');
-  row.className = 'garage-row';
-  const label = document.createElement('span');
-  label.textContent = FIELD_LABELS[field];
-  const prev = document.createElement('button');
-  prev.type = 'button';
-  prev.textContent = '◀';
-  prev.setAttribute('aria-label', `Previous ${FIELD_LABELS[field].toLowerCase()}`);
-  const value = document.createElement('span');
-  value.className = 'value';
-  value.setAttribute('aria-live', 'polite');
-  const next = document.createElement('button');
-  next.type = 'button';
-  next.textContent = '▶';
-  next.setAttribute('aria-label', `Next ${FIELD_LABELS[field].toLowerCase()}`);
-  const change = (dir: -1 | 1) => (e: Event) => {
-    e.stopPropagation();
-    busStyle = cycle(busStyle, field, dir);
-    renderer.style = busStyle;
-    saveStyle(busStyle);
-    renderGarage();
-  };
-  prev.addEventListener('click', change(-1));
-  next.addEventListener('click', change(1));
-  row.append(label, prev, value, next);
-  garageRows.append(row);
-  valueEls.set(field, value);
-}
-
-function renderGarage(): void {
-  for (const [field, el] of valueEls) el.textContent = optionName(busStyle, field);
-}
-renderGarage();
-
-btnRoute.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const r = nextRoute(game.route);
-  if (!game.setRoute(r)) return;
-  route = r;
-  saveRoute(r);
-  applyRoute(r);
-  btnRoute.setAttribute('aria-label', `Route: ${ROUTES[r].name}. Tap to change.`);
-});
-btnRoute.setAttribute('aria-label', `Route: ${ROUTES[route].name}. Tap to change.`);
-
-btnGarage.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (game.openGarage()) syncUi();
-});
-garageDone.addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (game.closeGarage()) syncUi();
-});
-window.addEventListener('keydown', (e) => {
-  if (game.phase === 'garage' && (e.code === 'Escape' || e.code === 'Enter')) {
-    e.preventDefault();
-    if (game.closeGarage()) syncUi();
-  }
-});
-
 btnMute.addEventListener('click', (e) => {
   e.stopPropagation();
   audio.unlock();
@@ -287,9 +248,7 @@ function syncUi(): void {
   btnRetry.hidden = !over;
   btnShare.hidden = !over;
   btnMute.hidden = game.phase === 'crashed';
-  btnGarage.hidden = game.phase !== 'title';
-  btnRoute.hidden = game.phase !== 'title';
-  garagePanel.hidden = game.phase !== 'garage';
+  credit.hidden = game.phase !== 'title';
   if (over) btnShare.href = whatsappUrl(game.world.score);
   document.body.dataset.phase = game.phase;
 }
@@ -338,8 +297,7 @@ const hook: Record<string, unknown> = {
     song: audio.songState,
     muted: audio.muted,
     debug: debug.on,
-    style: { ...busStyle },
-    route: game.route,
+    layout: { ...laidOut },
     chillies: game.world.charm.chillies,
     boosting: game.world.charm.boostT > 0,
     invincible: game.world.invincible,

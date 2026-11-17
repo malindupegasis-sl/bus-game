@@ -118,7 +118,17 @@ Reference images are style-only: never copy them or commit them.
   (4233248: 112 unit tests; live in portrait + landscape: route switching, carry-over and separate
   high scores, reload persistence; garage, overlay and controls re-checked; music never dropped;
   no page errors)
-- **All v2 stages done. Waiting for the owner to test Stage 3 on the iPhone.**
+- Owner tested Stage 3: menu felt congested and the two routes looked too similar on the phone.
+
+## Simplification + rotation fix (after Stage 3)
+- [x] S.1 One route: route 1 (Kandy), its scenery, the ROUTE button and the route-picking code removed; 138 city scenery and number kept
+- [x] S.2 Garage removed (button, screen, customisation code); bus always classic red; Dham Rajina Xpress boost unchanged; old saved garage/route settings are never read
+- [x] S.3 Start screen: controls hint and "BEST ON ROUTE" removed; game over shows "BEST: n"; title ~10% bigger; music credit ~50% smaller (HTML text, 8px floor on small portraits)
+- [x] S.4 Single high score: the original key, which already holds the player's 138 score
+- [x] S.5 Rotation bug: layout uses the real visible area (visualViewport), re-lays out immediately on rotation/resize/visualViewport/ResizeObserver events plus re-checks at 100/300/600/1000 ms and a 400 ms safety timer (no dependence on animation frames); body fixed, nothing overflows, zoom snapped back to 1x if it ever happens. Tested: 6 rotations each on the start screen, mid-run and game over, plus fast back-and-forth and toolbar changes, in WebKit and Chromium at 390x844 and 375x667
+- [ ] S.6 Deployed and checked live in WebKit and Chromium -> STOP for the owner to test
+
+Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 
 ### Stage 3 notes
 - ROUTE button on the start screen toggles 138 City / 1 Kandy; remembered on the device (busgame.route).

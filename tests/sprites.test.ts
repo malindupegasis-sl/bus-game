@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { KINDS } from '../src/game/obstacles';
 import { BUS_SKINS, FONT_BIG, FONT_SMALL, PALETTE, PALM, SPRITES, type Font } from '../src/render/sprites';
 import { GAME_TITLE, MUSIC_CREDIT } from '../src/config';
-import { splitTitle } from '../src/render/renderer';
+import { TITLE_SCALE, splitTitle } from '../src/render/renderer';
 
 describe('sprites', () => {
   it('every sprite is rectangular and only uses palette colours', () => {
@@ -63,11 +63,12 @@ describe('sprites', () => {
     for (const ch of 'MNWZ') expect(FONT_SMALL[ch].w).toBeGreaterThan(3);
   });
 
-  it('title and credit fit on the 256px screen', () => {
+  it('the title, 10% bigger than before, still fits on the 256px screen', () => {
     const width = (f: Font, s: string, scale: number) => ([...s].reduce((w, c) => w + f[c].w + 1, 0) - 1) * scale;
     const [a, b] = splitTitle(GAME_TITLE);
     expect([a, b]).toEqual(['LANKAN BUS', 'LEGENDZ']);
-    expect(width(FONT_BIG, a, 3)).toBeLessThanOrEqual(256 - 8);
-    expect(width(FONT_SMALL, MUSIC_CREDIT.toUpperCase(), 1)).toBeLessThanOrEqual(256 - 8);
+    expect(TITLE_SCALE).toBeCloseTo(1.1);
+    expect(Math.round((width(FONT_BIG, a, 3) + 3) * TITLE_SCALE)).toBeLessThanOrEqual(256 - 8);
+    expect(MUSIC_CREDIT).toBe('Music: Nandana Sihina Gange by Sangeeth Wijesuriya');
   });
 });

@@ -22,17 +22,10 @@ function defaultStorage(): StorageLike | null {
   }
 }
 
-/**
- * Each route keeps its own high score. Route 138 uses the original key, so a high score from
- * before routes existed carries over to the 138.
- */
-export function highScoreKey(route = '138'): string {
-  return route === '138' ? HIGH_SCORE_KEY : `${HIGH_SCORE_KEY}.${route}`;
-}
-
-export function loadHighScore(storage: StorageLike | null = defaultStorage(), route = '138'): number {
+/** One high score, under the original key (it already holds the player's 138 score). */
+export function loadHighScore(storage: StorageLike | null = defaultStorage()): number {
   try {
-    const raw = storage?.getItem(highScoreKey(route));
+    const raw = storage?.getItem(HIGH_SCORE_KEY);
     const n = raw == null ? 0 : parseInt(raw, 10);
     return Number.isFinite(n) && n > 0 ? n : 0;
   } catch {
@@ -41,11 +34,11 @@ export function loadHighScore(storage: StorageLike | null = defaultStorage(), ro
 }
 
 /** Saves if `score` beats the stored value. Returns the (possibly new) high score. */
-export function saveHighScore(score: number, storage: StorageLike | null = defaultStorage(), route = '138'): number {
-  const best = loadHighScore(storage, route);
+export function saveHighScore(score: number, storage: StorageLike | null = defaultStorage()): number {
+  const best = loadHighScore(storage);
   if (score <= best) return best;
   try {
-    storage?.setItem(highScoreKey(route), String(Math.floor(score)));
+    storage?.setItem(HIGH_SCORE_KEY, String(Math.floor(score)));
   } catch {
     /* storage full / blocked: keep the in-memory value */
   }

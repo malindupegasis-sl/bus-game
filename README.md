@@ -55,7 +55,8 @@ Music: *Nandana Sihina Gange* by Sangeeth Wijesuriya (`public/audio/song.mp3`).
 | --- | --- |
 | `src/config.ts` | Resolution (256×144), lane geometry, timings, share link |
 | `src/game/difficulty.ts` | 20s warm-up, then speed / spawn-rate ramp; obstacle mix (pure) |
-| `src/game/bubble.ts` | Tuk-tuk swearing bubble: text pick and placement (rides with the tuk-tuk, never over the bus) |
+| `src/game/bubble.ts` | Speech bubbles (tuk-tuk, politician, conductor): placement, never over the bus |
+| `src/viewport.ts` | Real visible area (visualViewport) for rotation-safe layout |
 | `src/render/busPose.ts` | Bus tilt, squash & stretch, bounce, wheel spin, glow (kept inside its lane) |
 | `src/game/obstacles.ts` | Obstacle kinds registry: size, hitbox, speed, tuk-tuk swerve |
 | `src/game/fairness.ts` | Lane-occupancy model and the "is there still a way through?" search |

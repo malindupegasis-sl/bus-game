@@ -1,5 +1,5 @@
 import {
-  BUS_X, GAME_TITLE, HUD_TOP, MUSIC_CREDIT, VEHICLE_BASELINE, KMH_PER_SPEED, LANE_CENTER_Y, LANE_HEIGHT, ROAD_BOTTOM,
+  BUS_X, GAME_TITLE, HUD_TOP, VEHICLE_BASELINE, KMH_PER_SPEED, LANE_CENTER_Y, LANE_HEIGHT, ROAD_BOTTOM,
   ROAD_TOP, VIEW_H, VIEW_W, laneY,
 } from '../config';
 import type { Game } from '../game/game';
@@ -7,8 +7,6 @@ import { formatScore } from '../game/score';
 import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
-import { COLOURS, DEFAULT_STYLE, SIGNS, effectiveLook, type BusStyle } from '../game/garage';
-import type { Theme } from '../game/routes';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
 import { HUD, UI_RECTS, type Rect } from '../ui-layout';
@@ -21,11 +19,10 @@ import {
 
 type Align = 'left' | 'center' | 'right';
 
+/** The start-screen title is drawn this much bigger than the 3x font. */
+export const TITLE_SCALE = 1.1;
 /** Colour-cycling LED strip colours for the Dham Rajina Xpress. */
 const LED_COLORS = ['#ff2a6d', '#ffd400', '#28ff8c', '#2ad4ff', '#a64dff', '#ff7ae6'];
-/** Landscape garage: the 2x preview starts here; the options panel starts at GARAGE_PANEL_LEFT. */
-export const GARAGE_PREVIEW_X = 4;
-export const GARAGE_PANEL_LEFT = GARAGE_PREVIEW_X + 2 * 74 + 4; // 156
 /** Collect feedback timings (s): body glint, sparkle burst, popups. All under a second. */
 const GLINT_TIME = 0.4;
 const BURST_TIME = 0.45;
@@ -62,12 +59,8 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private cache = new Map<string, HTMLCanvasElement>();
   private textCache = new Map<string, HTMLCanvasElement>();
-  /** Your bus's look from the garage (the boost look overrides it). */
-  style: BusStyle = { ...DEFAULT_STYLE };
-  /** Garage preview sits on the left in landscape (the options panel covers the right). */
-  garageLeft = false;
+
   muted = false;
-  touchHint = true;
 
   constructor(canvasEl: HTMLCanvasElement) {
     canvasEl.width = VIEW_W;
@@ -126,9 +119,8 @@ export class Renderer {
     return this.pixelMap(SPRITES[name], { ...PALETTE, ...BUS_SKINS[skin] }, key);
   }
 
-  /** Route number shown on the sign board of your bus and of rival buses, and the title button label. */
-  route = '138';
-  routeButton = 'ROUTE 138 CITY';
+  /** Route number shown on the sign board of your bus and of rival buses. */
+  readonly route = '138';
 
   private palette(skin: keyof typeof BUS_SKINS, glow: number): Record<string, string | undefined> {
     const key = `${skin}:${glow}`;
@@ -160,90 +152,6 @@ export class Renderer {
       } else {
         const t = this.textImage(this.route, BUS_GLOW[glow], 1, false, FONT_SMALL);
         g.drawImage(t, 55 + Math.floor((19 - t.width) / 2), 1);
-      }
-    });
-  }
-
-  /** Your bus with its garage colour, sign, stickers and static lights baked in (cached). */
-  private playerStatic(glow: number): HTMLCanvasElement {
-    const st = this.style;
-    const key = `player:${st.colour}:${st.sign}:${st.stickers}:${st.lights === 'roof'}:${glow}:${this.route}`;
-    const hit = this.cache.get(key);
-    if (hit) return hit;
-    const glowCol = SIGNS[st.sign].glow[glow];
-    const palKey = `pal:${st.colour}:${glowCol}`;
-    let pal = this.spritePalettes.get(palKey);
-    if (!pal) {
-      pal = { ...PALETTE, ...COLOURS[st.colour].pal, O: glowCol };
-      this.spritePalettes.set(palKey, pal);
-    }
-    const base = this.pixelMap(SPRITES.bus, pal, `pbase:${st.colour}:${glowCol}`);
-    return this.layer(key, base.width, base.height, (g) => {
-      g.drawImage(base, 0, 0);
-      this.rect(55, 0, 19, 6, PALETTE.K, g);
-      if (st.sign !== 'scroll') {
-        const t = this.textImage(this.route, glowCol, 1, false, FONT_SMALL);
-        g.drawImage(t, 55 + Math.floor((19 - t.width) / 2), 1);
-      }
-      this.stickers(g, st.stickers);
-      if (st.lights === 'roof') {
-        const cols = ['#ff3030', '#ffd400', '#30ff60', '#30a0ff'];
-        for (let x = 1; x < 72; x += 3) this.rect(x, 3, 1, 1, cols[(x / 3) % cols.length | 0], g);
-      }
-    });
-  }
-
-  /** Decals on the lower body (clear of the wheel arches and the door). */
-  private stickers(g: CanvasRenderingContext2D, kind: BusStyle['stickers']): void {
-    if (kind === 'stars') {
-      for (const [x, y] of [[4, 19], [26, 19], [36, 20], [69, 19]]) {
-        this.rect(x + 1, y, 1, 3, '#fff060', g);
-        this.rect(x, y + 1, 3, 1, '#fff060', g);
-        this.rect(x + 1, y + 1, 1, 1, '#ffffff', g);
-      }
-    } else if (kind === 'flames') {
-      for (let x = 24; x <= 43; x++) {
-        const hgt = Math.round(2 + 1.5 * Math.sin(x * 0.9) + (43 - x) / 10);
-        this.rect(x, 22 - hgt, 1, hgt, '#ff8c00', g);
-        if (hgt > 2) this.rect(x, 23 - hgt + 1, 1, hgt - 2, '#ffe040', g);
-      }
-    } else if (kind === 'flowers') {
-      for (const [x, y] of [[3, 19], [27, 19], [37, 19], [68, 19]]) {
-        this.rect(x + 1, y, 1, 1, '#ff7ad8', g);
-        this.rect(x, y + 1, 1, 1, '#ff7ad8', g);
-        this.rect(x + 2, y + 1, 1, 1, '#ff7ad8', g);
-        this.rect(x + 1, y + 2, 1, 1, '#ff7ad8', g);
-        this.rect(x + 1, y + 1, 1, 1, '#ffe040', g);
-      }
-    }
-  }
-
-  private scratch2: [HTMLCanvasElement, CanvasRenderingContext2D] | null = null;
-
-  /** Your bus this frame: the static look plus the animated rainbow lights / scrolling sign. */
-  private playerFrame(glow: number, now: number): HTMLCanvasElement {
-    const st = this.style;
-    const base = this.playerStatic(glow);
-    if (st.lights !== 'rainbow' && st.sign !== 'scroll') return base;
-    if (!this.scratch2) this.scratch2 = canvas(base.width, base.height);
-    const [c, g] = this.scratch2;
-    g.clearRect(0, 0, c.width, c.height);
-    g.drawImage(base, 0, 0);
-    if (st.lights === 'rainbow') g.drawImage(this.ledStrip(Math.floor(now * 10) % LED_COLORS.length, base.width), 0, 3);
-    if (st.sign === 'scroll') {
-      const text = this.textImage('LANKAN BUS LEGENDZ * ', SIGNS.scroll.glow[glow], 1, false, FONT_SMALL);
-      const off = Math.floor(now * 18) % text.width;
-      const first = Math.min(17, text.width - off);
-      g.drawImage(text, off, 0, first, 5, 56, 1, first, 5);
-      if (first < 17) g.drawImage(text, 0, 0, 17 - first, 5, 56 + first, 1, 17 - first, 5);
-    }
-    return c;
-  }
-
-  private ledStrip(phase: number, width: number): HTMLCanvasElement {
-    return this.layer(`led:${phase}`, width, 1, (lg) => {
-      for (let x = 0; x < width; x++) {
-        this.rect(x, 0, 1, 1, x % 2 ? '#2a0838' : LED_COLORS[(Math.floor(x / 2) + phase) % LED_COLORS.length], lg);
       }
     });
   }
@@ -320,6 +228,14 @@ export class Renderer {
     this.ctx.drawImage(this.textImage(s, color, scale, shadow, font), cx, Math.round(y));
   }
 
+  /** Start-screen title: the 5×7 font at 3x, drawn 10% bigger. */
+  private bigTitle(s: string, y: number): void {
+    const img = this.textImage(s, SCENE.title, 3, true, FONT_BIG);
+    const w = Math.round(img.width * TITLE_SCALE);
+    const h = Math.round(img.height * TITLE_SCALE);
+    this.ctx.drawImage(img, Math.round((VIEW_W - w) / 2), y, w, h);
+  }
+
   /** Title text in the 5×7 font. */
   title(s: string, y: number, scale: number, color = SCENE.title): void {
     this.text(s, VIEW_W / 2, y, color, scale, 'center', true, FONT_BIG);
@@ -344,7 +260,7 @@ export class Renderer {
       ctx.translate(Math.round((Math.random() * 2 - 1) * a), Math.round((Math.random() * 2 - 1) * a));
     }
     this.scene(d);
-    if (game.phase !== 'garage') this.entities(game, now, d, busPos); // garage: empty road behind the preview
+    this.entities(game, now, d, busPos);
     ctx.restore();
     this.lastFill = ''; // restore() reset fillStyle
     if (game.phase === 'crashed' && game.phaseTime < 0.06) this.rect(0, 0, VIEW_W, HUD_TOP, '#fcfcfc');
@@ -359,12 +275,8 @@ export class Renderer {
     if (x + img.width < VIEW_W) this.ctx.drawImage(img, Math.round(x + img.width), y);
   }
 
-  /** Scenery theme for the current route: Colombo city streets, or the hills to Kandy. */
-  theme: Theme = 'city';
-
   private scene(d: number): void {
-    if (this.theme === 'city') this.sceneCity(d);
-    else this.sceneHills(d);
+    this.sceneCity(d);
     // Lane dashes are the same on every route.
     const dashes = this.layer('dashes', 256 + 24, ROAD_BOTTOM - ROAD_TOP, (g) => {
       for (let l = 1; l < LANE_CENTER_Y.length; l++) {
@@ -462,77 +374,6 @@ export class Renderer {
       }
     });
     this.strip(bottom, 120, d, B);
-  }
-
-  // ---- Route 1: Colombo to Kandy (hills) ---------------------------------------------------
-
-  private sceneHills(d: number): void {
-    const T = ROAD_TOP;
-    // Far blue-green ridges, then nearer green hills with a road winding over them, and trees.
-    const far = this.layer('hillsFar', 512, T, (g) => {
-      this.rect(0, 0, 512, T, '#5cc8f8', g);
-      for (let x = 0; x < 512; x++) {
-        const h = Math.round(5 + 2 * Math.sin((2 * Math.PI * 3 * x) / 512) + Math.sin((2 * Math.PI * 13 * x) / 512));
-        this.rect(x, T - h, 1, h, '#4c9c8c', g);
-      }
-    });
-    this.strip(far, 512, d * 0.12, 0);
-    const near = this.layer('hillsNear', 512, T, (g) => {
-      for (let x = 0; x < 512; x++) {
-        const h = Math.max(1, Math.round(3 + 2 * Math.sin((2 * Math.PI * 5 * x) / 512 + 1) + Math.sin((2 * Math.PI * 17 * x) / 512)));
-        this.rect(x, T - h, 1, h, x % 7 < 2 ? '#138a3c' : '#1ca048', g);
-        // A road winding up the slopes (the bends of the hill country).
-        if (h >= 4 && Math.floor(x / 40) % 2 === 0) {
-          const ry = T - h + 1 + Math.round(1.2 * Math.sin(x / 6));
-          if (ry < T - 1) this.rect(x, ry, 1, 1, '#e0cfa0', g);
-        }
-        if (x % 23 === 0 && h >= 3) {
-          this.rect(x, T - h - 2, 3, 2, '#0c6c2c', g);
-          this.rect(x + 1, T - h - 3, 1, 1, '#0c6c2c', g);
-        }
-      }
-    });
-    this.strip(near, 512, d * 0.35, 0);
-    const verge = this.layer('hillsVergeTop', 256 + 23, 2, (g) => {
-      this.rect(0, 0, 256 + 23, 2, SCENE.dirt, g);
-      for (let x = 0; x < 256 + 23; x += 23) this.rect(x, 1, 2, 1, SCENE.dirtDark, g);
-    });
-    this.strip(verge, 23, d, T - 2);
-
-    // Older hill road: lighter asphalt with patches and cracks.
-    const road = this.roadTile('roadHills', '#6a6a6a', '#5a5a5a', SCENE.edge, (g) => {
-      for (const [x, y, w, h] of [[30, 6, 12, 5], [140, 40, 9, 6], [210, 72, 14, 4], [90, 80, 8, 5]]) this.rect(x, y, w, h, '#5c5c5c', g);
-      for (const [x, y] of [[70, 20], [170, 60], [240, 30]]) {
-        for (let i = 0; i < 6; i++) this.rect(x + i, y + ((i * 3) % 4) - 1, 1, 1, '#4c4c4c', g);
-      }
-    });
-    this.strip(road, 256, d, ROAD_TOP);
-
-    // Bottom: red-earth shoulder, rows of tea bushes, bend warning signs and milestones.
-    const B = ROAD_BOTTOM;
-    const H = HUD_TOP - B;
-    const bottom = this.layer('hillsBottom', 256 + 111, H, (g) => {
-      this.rect(0, 0, 256 + 111, 2, SCENE.dirt, g);
-      for (let x = 0; x < 256 + 111; x += 19) this.rect(x, 1, 2, 1, SCENE.dirtDark, g);
-      this.rect(0, 2, 256 + 111, H - 2, '#006c28', g);
-      for (let x = 0; x < 256 + 111; x += 8) {
-        this.rect(x + 1, 3, 6, H - 3, '#00a844', g);
-        this.rect(x + 2, 2, 4, 1, '#00a844', g);
-        this.rect(x + 2, 3, 3, 1, '#58d878', g);
-      }
-      for (let x = 50; x < 256 + 111; x += 111) {
-        // Bend warning sign: yellow diamond with a black curve, on a grey post.
-        this.rect(x + 2, 4, 1, H - 4, '#9c9c9c', g);
-        const diamond = ['..y..', '.yKy.', 'yK.yy', '.yKy.', '..y..'];
-        diamond.forEach((row, dy) => [...row].forEach((c, dx) => c !== '.' && this.rect(x + dx, dy, 1, 1, c === 'y' ? '#f8d800' : '#101010', g)));
-      }
-      for (let x = 92; x < 256 + 111; x += 111) {
-        // Milestone: white post with a red cap.
-        this.rect(x, 2, 3, 1, '#d82800', g);
-        this.rect(x, 3, 3, H - 3, '#f0f0f0', g);
-      }
-    });
-    this.strip(bottom, 111, d, B);
   }
 
   private drawList: { y: number; o: Obstacle | null; lane: number }[] = [];
@@ -667,8 +508,9 @@ export class Renderer {
 
     // Which look: the Dham Rajina Xpress while boosted, flickering back during the transition.
     const c = w.charm;
-    const xpress = effectiveLook(c, flicker(now), TRANSITION_TIME) === 'xpress';
-    const img = xpress ? this.xpressFrame(pose.glow, now) : this.playerFrame(pose.glow, now);
+    // Classic red bus; the Dham Rajina Xpress while boosted, flickering back during the transition.
+    const xpress = c.boostT > 0 || (c.transitionT > 0 && flicker(now) < c.transitionT / TRANSITION_TIME);
+    const img = xpress ? this.xpressFrame(pose.glow, now) : this.busImage('classic', pose.glow);
     // Lucky-charm save: blink while invincible.
     const blink = c.invincibleT > 0 && c.boostT === 0 && c.transitionT === 0 && Math.floor(now * 10) % 2 === 0;
     if (blink) this.ctx.globalAlpha = 0.3;
@@ -1104,7 +946,7 @@ export class Renderer {
     this.text(String(Math.min(99999, game.highScore)), HUD.score.x + 3, HUD_TOP + 18, SCENE.lcdOn, 1, 'left', false);
     this.lcdBig(String(Math.min(99999, w.score)).padStart(HUD.scoreDigits.n, ' '), HUD.scoreDigits.x, HUD.scoreDigits.y);
     this.charmIcon(game, now, HUD.charmIcon.x, HUD.charmIcon.y);
-    const kmh = Math.round(w.crashed || game.phase === 'title' || game.phase === 'garage' ? 0 : w.speed * KMH_PER_SPEED);
+    const kmh = Math.round(w.crashed || game.phase === 'title' ? 0 : w.speed * KMH_PER_SPEED);
     this.lcdBig(String(Math.min(999, kmh)).padStart(HUD.speedDigits.n, ' '), HUD.speedDigits.x, HUD.speedDigits.y);
   }
 
@@ -1181,36 +1023,11 @@ export class Renderer {
     switch (game.phase) {
       case 'title': {
         this.dim();
+        // Title about 10% bigger than the 3x 5×7 font (cached image scaled with nearest-neighbour).
         const [l1, l2] = splitTitle(GAME_TITLE);
-        this.title(l1, 5, 3);
-        this.title(l2, 29, 3);
-        this.text(`BEST ON ROUTE ${this.route}: ${formatScore(game.highScore)}`, mid, 55, SCENE.text, 1, 'center');
-        if (blink) this.text('TAP TO START', mid, 65, SCENE.text, 2, 'center');
-        this.text(
-          this.touchHint ? 'SWIPE OR TAP THE ARROWS TO CHANGE LANE' : 'UP/DOWN ARROWS OR W/S TO CHANGE LANE',
-          mid, 83, SCENE.skyLow, 1, 'center',
-        );
-        this.text(MUSIC_CREDIT, mid, 98, PALETTE.V, 1, 'center');
-        this.button(UI_RECTS.garage, 'GARAGE', '#7a1aa8', 1, true);
-        this.button(UI_RECTS.route, this.routeButton, '#0058f8', 1, true);
-        break;
-      }
-      case 'garage': {
-        this.dim();
-        // 2x preview of your bus (left half in landscape, where the options panel isn't).
-        const glow = (Math.imul(Math.floor(now * 12), 2654435761) >>> 0) % 4;
-        const img = this.playerFrame(glow, now);
-        const pw = img.width * 2;
-        const px = this.garageLeft ? GARAGE_PREVIEW_X : Math.round((VIEW_W - pw) / 2);
-        const py = 26;
-        const title = this.textImage('GARAGE', SCENE.title, 2, true, FONT_BIG);
-        this.ctx.drawImage(title, this.garageLeft ? px + Math.round((pw - title.width) / 2) : Math.round((VIEW_W - title.width) / 2), 6);
-        this.ctx.drawImage(img, px, py, pw, img.height * 2);
-        const frame = Math.floor(now * 8) % 4;
-        for (const wx of BUS_WHEELS.xs) {
-          const wi = this.wheelImage(frame);
-          this.ctx.drawImage(wi, px + (wx - BUS_WHEELS.r) * 2, py + (BUS_WHEELS.y - BUS_WHEELS.r) * 2, wi.width * 2, wi.height * 2);
-        }
+        this.bigTitle(l1, 8);
+        this.bigTitle(l2, 35);
+        if (blink) this.text('TAP TO START', mid, 70, SCENE.text, 2, 'center');
         break;
       }
       case 'paused':
@@ -1222,7 +1039,7 @@ export class Renderer {
         this.dim();
         this.title('GAME OVER', 7, 3);
         this.text(`SCORE ${formatScore(game.world.score)}`, mid, 34, SCENE.text, 2, 'center');
-        this.text(`BEST ON ROUTE ${this.route}: ${formatScore(game.highScore)}`, mid, 51, SCENE.text, 1, 'center');
+        this.text(`BEST: ${formatScore(game.highScore)}`, mid, 51, SCENE.text, 1, 'center');
         if (game.newBest && blink) this.text('NEW BEST!', mid, 62, PALETTE.y, 1, 'center');
         const ok = game.canRetry();
         this.button(UI_RECTS.retry, 'RETRY', '#e45c10', 2, ok);
