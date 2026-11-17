@@ -129,6 +129,16 @@ Reference images are style-only: never copy them or commit them.
 - [x] S.6 Deployed and checked live in WebKit and Chromium (9c0ff6b): rotation stress test (start, mid-run, game over; 390x844 and 375x667) passed in both engines; WebKit play checks in portrait + landscape; Chromium controls and overlay checks; 103 unit tests incl. fairness
 - **Waiting for the owner to test on the iPhone (Safari and Chrome).**
 
+## Boost upgrade: knockouts
+- [x] K.1 During the boost (and its 1 s transition) the bus knocks vehicles off the road instead of passing through: the vehicle is removed from the world at once (several in one step if needed), so it can't hit the bus or block a lane
+- [x] K.2 Scoring: +25 KNOCKOUT per vehicle, doubled by the boost (+50); combo counter x2, x3... for knockouts within 2 s of each other (display only)
+- [x] K.3 Animations (pre-rendered rotation/tip frames, pooled wrecks and particles): lorry shoved to the road edge, tips onto its side with dust and spilled cargo; tuk-tuk spins off the top of the screen with a trailing swear bubble; convoy SUVs scatter like bowling pins with lights flashing and "I'LL SUE!!" / "MY LAWYER!!" / "WHO DID THIS?!"; rival bus spins and slides off backwards; family motorbike swerves onto the verge, fists shaking, dog barking "WOOF!"
+- [x] K.4 Screen shake 2-3 px for ~0.1 s per knockout; SCREEN SHAKE on/off button in the debug overlay (remembered, busgame.shake)
+- [x] K.5 Outside the boost nothing changes (crash ends the run or uses the lucky charm; the charm's blink still passes through)
+- [x] K.6 Tests: knockout scoring, boost doubling, combo window, several hits in one step, charm/crash unchanged outside the boost, a 35 s boost through heavy traffic on 10 seeds (knocked-off vehicles never return or cause a crash), effect pools fixed-size, every wreck leaves the screen within 2 s; fairness tests unchanged (116 tests)
+- [x] K.7 Performance: 60 fps (no frame over 20 ms) with a knockout every ~150 ms, 4x CPU throttle, 390x844 @3x
+- [ ] K.8 Deployed and checked live in WebKit and Chromium -> STOP for phone testing
+
 Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 
 ### Stage 3 notes

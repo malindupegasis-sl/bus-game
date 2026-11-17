@@ -113,11 +113,31 @@ body[data-phase='crashed'] .ctrl {
 }
 
 /* Debug overlay (tap the score 5 times) */
-#debug {
+#debug-box {
   position: fixed;
   left: calc(env(safe-area-inset-left) + 4px);
   top: calc(env(safe-area-inset-top) + 4px);
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+}
+#debug-box[hidden] {
+  display: none;
+}
+.debug-toggle {
+  pointer-events: auto;
+  padding: 6px 10px;
+  border: 1px solid #7cfc7c;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #7cfc7c;
+  font: 12px/1 ui-monospace, Menlo, monospace;
+  touch-action: manipulation;
+}
+#debug {
   margin: 0;
   padding: 4px 6px;
   background: rgba(0, 0, 0, 0.75);

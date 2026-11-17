@@ -25,6 +25,13 @@ const credit = $<HTMLParagraphElement>('#credit');
 credit.textContent = MUSIC_CREDIT;
 
 const renderer = new Renderer(canvas);
+/** Knockout screen shake on/off (set in the debug overlay, remembered on this device). */
+const SHAKE_KEY = 'busgame.shake';
+try {
+  renderer.shakeOn = localStorage.getItem(SHAKE_KEY) !== '0';
+} catch {
+  /* ignore */
+}
 const game = new Game();
 const audio = new AudioManager();
 renderer.muted = audio.muted;
@@ -143,8 +150,22 @@ const debug = new DebugOverlay(() => {
     `LAST ${audio.lastEvent}`,
     `RUN ${game.phase} t=${game.world.t.toFixed(1)}s  vehicles ${game.world.obstacles.length}  particles ${renderer.particleCount}`,
     `CHARM chillies ${game.world.charm.chillies}${game.world.charm.boostT > 0 ? '  BOOST' : ''}${game.world.invincible ? '  invincible' : ''}  bonus ${game.world.bonus}`,
+    `KNOCKOUTS ${game.world.knockouts}  combo x${game.world.combo.count}  wrecks ${renderer.fx.wreckCount}  fx ${renderer.fx.particleCount}`,
   ];
-});
+}, [
+  {
+    label: 'SCREEN SHAKE',
+    get: () => renderer.shakeOn,
+    set: (on) => {
+      renderer.shakeOn = on;
+      try {
+        localStorage.setItem(SHAKE_KEY, on ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+    },
+  },
+]);
 
 // ------------------------------------------------------------ input + audio
 
@@ -303,6 +324,10 @@ const hook: Record<string, unknown> = {
     invincible: game.world.invincible,
     bonus: game.world.bonus,
     saves: game.world.saves,
+    knockouts: game.world.knockouts,
+    combo: game.world.combo.count,
+    wrecks: renderer.fx.wreckCount,
+    shake: renderer.shakeOn,
     pickups: game.world.pickups.length,
     kinds: game.world.obstacles.map((o) => o.kind),
     fps: debug.fps,

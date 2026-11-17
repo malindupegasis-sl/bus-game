@@ -73,8 +73,15 @@ export function tickCharm(c: Charm, dt: number): CharmEvent[] {
   return ev;
 }
 
-/** A collision happened: ignore it (invincible), save it (charm), or it's a crash. */
-export function onHit(c: Charm): 'ignored' | 'saved' | 'crash' {
+/** The boost (and its transition back) knocks vehicles off the road. */
+export const knocksOff = (c: Charm) => c.boostT > 0 || c.transitionT > 0;
+
+/**
+ * A collision happened: knock the vehicle off (boosted), ignore it (lucky-charm blink), save it
+ * (charm), or it's a crash.
+ */
+export function onHit(c: Charm): 'knockout' | 'ignored' | 'saved' | 'crash' {
+  if (knocksOff(c)) return 'knockout';
   if (invincible(c)) return 'ignored';
   if (c.chillies === 2) {
     c.chillies = 0;

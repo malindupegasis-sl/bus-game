@@ -11,6 +11,13 @@ export function registerTap(taps: number[], now: number): { taps: number[]; togg
   return { taps: recent, toggle: false };
 }
 
+/** An on/off setting with a button in the overlay (e.g. screen shake). */
+export interface DebugToggle {
+  label: string;
+  get(): boolean;
+  set(on: boolean): void;
+}
+
 export interface DebugSource {
   fpsInfo(): string;
   musicInfo(): string[];
@@ -22,6 +29,7 @@ export interface DebugSource {
  */
 export class DebugOverlay {
   private el: HTMLElement;
+  private box: HTMLElement;
   private taps: number[] = [];
   private enabled = false;
   // FPS: frame timestamps in the last second, and the worst frame gap seen in it.
@@ -30,17 +38,41 @@ export class DebugOverlay {
   private last = 0;
   private lastPaint = 0;
 
-  constructor(private src: () => string[]) {
+  constructor(private src: () => string[], toggles: DebugToggle[] = []) {
+    this.box = document.createElement('div');
+    this.box.id = 'debug-box';
     this.el = document.createElement('pre');
     this.el.id = 'debug';
     this.el.setAttribute('aria-hidden', 'true');
-    document.body.appendChild(this.el);
+    this.box.appendChild(this.el);
+    for (const t of toggles) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'debug-toggle';
+      const paint = () => {
+        b.textContent = `${t.label}: ${t.get() ? 'ON' : 'OFF'}`;
+        b.setAttribute('aria-pressed', String(t.get()));
+      };
+      paint();
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        t.set(!t.get());
+        paint();
+      });
+      this.box.appendChild(b);
+    }
+    document.body.appendChild(this.box);
     try {
       this.enabled = localStorage.getItem(KEY) === '1';
     } catch {
       /* ignore */
     }
+    this.show();
+  }
+
+  private show(): void {
     this.el.hidden = !this.enabled;
+    this.box.hidden = !this.enabled;
   }
 
   get on(): boolean {
@@ -52,7 +84,7 @@ export class DebugOverlay {
     this.taps = r.taps;
     if (!r.toggle) return;
     this.enabled = !this.enabled;
-    this.el.hidden = !this.enabled;
+    this.show();
     try {
       localStorage.setItem(KEY, this.enabled ? '1' : '0');
     } catch {

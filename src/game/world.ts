@@ -2,13 +2,14 @@ import { BUS_X, DISTANCE_PER_POINT, laneY } from '../config';
 import { Bus } from './bus';
 import { CAPTIONS, OVERTAKE_BONUS, type CaptionKey } from './captions';
 import {
-  collect, invincible, newCharm, nextPickup, onHit, scoreMultiplier, speedMultiplier, tickCharm, type Charm,
+  collect, invincible, knocksOff, newCharm, nextPickup, onHit, scoreMultiplier, speedMultiplier, tickCharm, type Charm,
   type CharmEvent,
 } from './charm';
 import { speedAt } from './difficulty';
 import { BUS_HIT, KINDS, exitDistance, obstacleLane, obstacleX, type Obstacle } from './obstacles';
 import { createPickupSpawner, pickupGone, pickupX, touches, updatePickups, type Pickup, type PickupSpawner } from './pickups';
 import { createRng, type Rng } from './rng';
+import { KNOCKOUT_POINTS, bumpCombo, newCombo } from './knockout';
 import { createSpawner, updateSpawner, type SpawnerState } from './spawner';
 
 export type WorldEvent =
@@ -17,7 +18,8 @@ export type WorldEvent =
   | { type: 'charm'; what: CharmEvent }
   | { type: 'overtake'; bonus: number; obstacle: Obstacle }
   | { type: 'seen'; what: CaptionKey }
-  | { type: 'pickup'; kind: 'chilli' | 'lime'; lane: number; x: number };
+  | { type: 'pickup'; kind: 'chilli' | 'lime'; lane: number; x: number }
+  | { type: 'knockout'; obstacle: Obstacle; x: number; lane: number; points: number; combo: number };
 
 export interface WorldOptions {
   /** Chillies, limes, the charm and the boost. Off in the strict traffic-fairness tests. */
@@ -42,6 +44,9 @@ export class World {
   bonus = 0;
   /** Lucky-charm saves this run. */
   saves = 0;
+  /** Vehicles knocked off the road this run (boost), and the current combo. */
+  knockouts = 0;
+  readonly combo = newCombo();
   readonly rng: Rng;
   private readonly withPickups: boolean;
   private spawner: SpawnerState = createSpawner();
@@ -135,7 +140,12 @@ export class World {
     }
     this.obstacles = this.obstacles.filter((o) => this.d < exitDistance(o));
 
-    const hit = this.findCollision();
+    // Every vehicle the boosted bus touches this step is knocked off (there can be several).
+    let hit = this.findCollision();
+    while (hit && knocksOff(this.charm)) {
+      this.knockOff(hit);
+      hit = this.findCollision();
+    }
     if (hit) {
       const r = onHit(this.charm);
       if (r === 'saved') {
@@ -147,6 +157,16 @@ export class World {
         this.events.push({ type: 'crash', obstacle: hit });
       }
     }
+  }
+
+  /** Remove a vehicle from the road at once and score the knockout (doubled while boosted). */
+  private knockOff(o: Obstacle): void {
+    this.obstacles = this.obstacles.filter((x) => x !== o);
+    this.knockouts++;
+    const combo = bumpCombo(this.combo, this.t);
+    const points = KNOCKOUT_POINTS * scoreMultiplier(this.charm);
+    this.bonus += points;
+    this.events.push({ type: 'knockout', obstacle: o, x: obstacleX(o, this.d), lane: obstacleLane(o, this.d), points, combo });
   }
 
   get invincible(): boolean {

@@ -7,10 +7,12 @@ import { formatScore } from '../game/score';
 import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
+import { SUE_LINES } from '../game/knockout';
+import { KnockFx, SPIN_FRAMES, TIP_FRAMES, spinFrame, tipFrame, type Wreck, type WreckKind } from './knockFx';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
 import { HUD, UI_RECTS, type Rect } from '../ui-layout';
-import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, type BubbleRect, type Box } from '../game/bubble';
+import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, swearFor, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
   BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, SCENE, SPRITES, type Font,
@@ -253,11 +255,16 @@ export class Renderer {
     const busPos = w.bus.prevPos + (w.bus.pos - w.bus.prevPos) * alpha;
     const ctx = this.ctx;
     this.lastFill = '';
+    if (game.phase === 'title') this.warmKnockFx();
     ctx.save();
     // Screen shake right after a crash.
     if (game.phase === 'crashed' && game.phaseTime < 0.35) {
       const a = Math.round(3 * (1 - game.phaseTime / 0.35));
       ctx.translate(Math.round((Math.random() * 2 - 1) * a), Math.round((Math.random() * 2 - 1) * a));
+    } else if (this.shakeOn && game.phase === 'playing') {
+      // Small knockout shake (2–3 px, ~0.1 s); can be switched off in the debug overlay.
+      const [sx, sy] = this.fx.shakeOffset(Math.random);
+      if (sx || sy) ctx.translate(sx, sy);
     }
     this.scene(d);
     this.entities(game, now, d, busPos);
@@ -398,11 +405,21 @@ export class Renderer {
       else this.bus(game, busY, busPos, now, d);
     }
 
-    // Swearing bubbles go on top of everything on the road.
-    for (const o of w.obstacles) if (o.kind === 'tuktuk') this.bubble(o, d);
     const dt = Math.min(0.1, Math.max(0, now - this.lastOverlay));
     this.lastOverlay = now;
-    this.overlays(game, d, game.phase === 'paused' ? 0 : dt);
+    const live = game.phase === 'paused' ? 0 : dt;
+    // Knocked-off vehicles leaving the road (cosmetic only: they're no longer in the world).
+    if (this.fxWorld !== w) {
+      this.fxWorld = w;
+      this.fx.clear();
+    }
+    this.lastSpeed = w.speed;
+    this.fx.update(live, w.speed);
+    this.drawKnockFx(now);
+
+    // Swearing bubbles go on top of everything on the road.
+    for (const o of w.obstacles) if (o.kind === 'tuktuk') this.bubble(o, d);
+    this.overlays(game, d, live);
 
     if (game.phase === 'crashed' || game.phase === 'over') {
       const blink = Math.floor(now * 12) % 2 === 0;
@@ -425,7 +442,7 @@ export class Renderer {
 
   /** For the debug overlay. */
   get particleCount(): number {
-    return this.puffs.length + this.skids.length;
+    return this.puffs.length + this.skids.length + this.fx.particleCount + this.fx.wreckCount;
   }
 
   /** Skid marks are painted on the road, under every vehicle. */
@@ -779,9 +796,162 @@ export class Renderer {
     this.drawBubble({ ...at, w, h, text, scale: 1 });
   }
 
+  // ---------------------------------------------------------------- boost knockouts
+
+  /** Knocked-off vehicles, dust and cargo (pooled). */
+  readonly fx = new KnockFx();
+  private fxWorld: unknown = null;
+  /** Knockout screen shake (debug-overlay setting). */
+  shakeOn = true;
+  private lastSpeed = 0;
+  private warmed = false;
+
+  /** One of SPIN_FRAMES pre-rendered rotations of `src` (made once, then cached). */
+  private spunImage(key: string, src: HTMLCanvasElement, i: number): HTMLCanvasElement {
+    const s = Math.ceil(Math.hypot(src.width, src.height));
+    return this.layer(`spin:${key}:${i}`, s, s, (g) => {
+      g.translate(s / 2, s / 2);
+      g.rotate((i / SPIN_FRAMES) * Math.PI * 2);
+      g.drawImage(src, -Math.round(src.width / 2), -Math.round(src.height / 2));
+    });
+  }
+
+  /** The lorry tipping over: leaning frames, then the last frame lying on its side, wheels up. */
+  private tipImage(dir: -1 | 1, i: number): HTMLCanvasElement {
+    const src = this.sprite('lorry');
+    const s = Math.ceil(Math.hypot(src.width, src.height));
+    return this.layer(`tip:${dir}:${i}`, s, s, (g) => {
+      g.translate(s / 2, s / 2);
+      if (i < TIP_FRAMES - 1) g.rotate(dir * (i / (TIP_FRAMES - 1)) * 1.2);
+      else {
+        g.translate(0, src.height * 0.3);
+        g.scale(1, -0.65);
+      }
+      g.drawImage(src, -Math.round(src.width / 2), -Math.round(src.height / 2));
+    });
+  }
+
+  /** A single convoy SUV with its roof lights (two flash phases). */
+  private suvLit(phase: number): HTMLCanvasElement {
+    const suv = this.sprite('suv');
+    return this.layer(`suvLit:${phase}`, suv.width, suv.height + 1, (g) => {
+      g.drawImage(suv, 0, 1);
+      const redOn = phase === 0;
+      this.rect(9, 0, 4, 2, redOn ? '#ff2020' : '#601010', g);
+      this.rect(14, 0, 4, 2, redOn ? '#102060' : '#2060ff', g);
+      this.rect(8, 2, 11, 1, PALETTE.K, g);
+    });
+  }
+
+  /** The rival bus with its wheels baked in (for spinning). */
+  private rivalWhole(): HTMLCanvasElement {
+    const img = this.busImage('rival', 1);
+    const r = BUS_WHEELS.r;
+    return this.layer('rivalWhole', img.width, Math.max(img.height, BUS_WHEELS.y + r + 1), (g) => {
+      g.drawImage(img, 0, 0);
+      for (const wx of BUS_WHEELS.xs) g.drawImage(this.wheelImage(0), wx - r, BUS_WHEELS.y - r);
+    });
+  }
+
+  /** Pre-render every knock-off frame (on the start screen), so the first boost doesn't stutter. */
+  private warmKnockFx(): void {
+    if (this.warmed) return;
+    this.warmed = true;
+    for (let i = 0; i < SPIN_FRAMES; i++) {
+      this.spunImage('tuktuk', this.sprite('tuktuk'), i);
+      this.spunImage('suv0', this.suvLit(0), i);
+      this.spunImage('suv1', this.suvLit(1), i);
+      this.spunImage('rival', this.rivalWhole(), i);
+    }
+    for (let i = 0; i < TIP_FRAMES; i++) {
+      this.tipImage(-1, i);
+      this.tipImage(1, i);
+    }
+  }
+
+  /** A vehicle was knocked off: start its animation, show the score and combo, shake a little. */
+  private knockout(e: Extract<WorldEvent, { type: 'knockout' }>): void {
+    const o = e.obstacle;
+    const speed = this.lastSpeed;
+    const vx0 = -speed * o.f;
+    const top = (h: number) => laneY(e.lane) + VEHICLE_BASELINE + 1 - h;
+    if (o.kind === 'convoy') {
+      const suv = this.sprite('suv');
+      const step = CONVOY_SUV_W + CONVOY_GAP;
+      const y = top(suv.height) + suv.height / 2;
+      for (let i = 0; i < CONVOY_SUVS; i++) {
+        const text = i === 2 ? pick(SUE_LINES, o.id) : '';
+        this.fx.spawn('suv', o.id, e.x + i * step + suv.width / 2, y, vx0, speed, text, i, CONVOY_SUVS);
+      }
+    } else if (o.kind === 'rival') {
+      const img = this.rivalWhole();
+      const y = Math.round(laneY(e.lane)) + VEHICLE_BASELINE - BUS_WHEELS.r - BUS_WHEELS.y + img.height / 2;
+      this.fx.spawn('rival', o.id, e.x + img.width / 2, y, vx0, speed);
+    } else {
+      const img = this.sprite(o.kind);
+      const text = o.kind === 'tuktuk' ? swearFor(o.id) : o.kind === 'bike' ? 'WOOF!' : '';
+      this.fx.spawn(o.kind as WreckKind, o.id, e.x + img.width / 2, top(img.height) + img.height / 2, vx0, speed, text);
+    }
+    this.fx.shake(o.kind === 'tuktuk' || o.kind === 'bike' ? 2 : 3);
+    // One KNOCKOUT popup that refreshes (not a growing stack), with the combo counter beside it.
+    const text = `+${e.points} KNOCKOUT!`;
+    const p = this.popups.find((q) => q.ko);
+    if (p) {
+      p.text = text;
+      p.age = 0;
+    } else this.popups.push({ text, color: '#ff9040', age: 0, ko: true });
+    this.comboShow = { n: e.combo, age: 0 };
+  }
+
+  private drawKnockFx(now: number): void {
+    for (const w of this.fx.wrecks) if (w.alive) this.drawWreck(w, now);
+    const ctx = this.ctx;
+    for (const p of this.fx.parts) {
+      if (!p.alive) continue;
+      const sz = Math.max(1, Math.round(p.size));
+      if (p.grow) ctx.globalAlpha = Math.max(0, 0.85 * (1 - p.age / p.life));
+      this.rect(p.x - sz / 2, p.y - sz / 2, sz, sz, p.col);
+      if (p.grow) ctx.globalAlpha = 1;
+    }
+  }
+
+  private drawWreck(w: Wreck, now: number): void {
+    let img: HTMLCanvasElement;
+    if (w.kind === 'lorry') img = this.tipImage(w.dir, tipFrame(w.ang));
+    else if (w.kind === 'bike') img = this.sprite('bike');
+    else if (w.kind === 'tuktuk') img = this.spunImage('tuktuk', this.sprite('tuktuk'), spinFrame(w.ang));
+    else if (w.kind === 'rival') img = this.spunImage('rival', this.rivalWhole(), spinFrame(w.ang));
+    else {
+      // Lights keep flashing as the SUVs scatter.
+      const phase = (Math.floor(now * 8) + (w.vy > 0 ? 1 : 0)) % 2;
+      img = this.spunImage(`suv${phase}`, this.suvLit(phase), spinFrame(w.ang));
+    }
+    const x = Math.round(w.x - img.width / 2);
+    const y = Math.round(w.y - img.height / 2);
+    this.ctx.drawImage(img, x, y);
+    if (w.kind === 'bike') {
+      // The family shakes their fists (above the riders' heads), the dog barks.
+      const up = Math.floor(now * 10) % 2;
+      for (const [fx, fy] of [[3, 1 - up], [13, up], [10, 2 - up]]) {
+        this.rect(x + fx - 1, y + fy - 1, 4, 4, PALETTE.K);
+        this.rect(x + fx, y + fy, 2, 2, PALETTE.S);
+      }
+      if (w.age > 0.12 && w.age < 1.8 && Math.floor(w.age * 3) % 3 !== 2) {
+        this.speech(w.text, { x: x + 20, y: y + 9, w: 8, h: 6 }, ['right', 'above']);
+      }
+      return;
+    }
+    if (!w.text) return;
+    const box = { x, y, w: img.width, h: img.height };
+    if (w.kind === 'tuktuk') this.speech(w.text, box, ['below', 'right', 'above']);
+    else if (w.age < 1.3) this.speech(w.text, box, ['above', 'below', 'right']);
+  }
+
   // ---------------------------------------------------------------- events, popups, captions
 
-  private popups: { text: string; color: string; age: number }[] = [];
+  private popups: { text: string; color: string; age: number; ko?: boolean }[] = [];
+  /** The knockout combo counter (x2, x3…) shown next to the KNOCKOUT popup. */
+  private comboShow = { n: 0, age: 9 };
   private captionQueue: CaptionKey[] = [];
   private caption: { key: CaptionKey; age: number } | null = null;
   private fallingCharm: { x: number; y: number; vy: number; age: number } | null = null;
@@ -804,6 +974,7 @@ export class Renderer {
         this.bursts.push({ x: cx, y: cy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, age: 0, col });
       }
     }
+    else if (e.type === 'knockout') this.knockout(e);
     else if (e.type === 'overtake') this.popups.push({ text: `+${e.bonus} OVERTAKE!`, color: PALETTE.y, age: 0 });
     else if (e.type === 'charm' && e.what === 'saved') {
       this.popups.push({ text: 'LUCKY CHARM!', color: '#7cfc7c', age: 0 });
@@ -857,15 +1028,23 @@ export class Renderer {
       if (p.age < POPUP_TIME) this.popups[n++] = p;
     }
     this.popups.length = n;
+    this.comboShow.age += dt;
     const r = this.busRect;
     this.popups.forEach((p, i) => {
       const tw = this.textWidth(p.text);
       const x = Math.max(1, Math.min(VIEW_W - 1 - tw, Math.round(r.x + r.w / 2 - tw / 2)));
       const rise = Math.round(p.age * 8);
       const above = r.y - 8 - i * 7 - rise;
-      const y = above >= ROAD_TOP ? above : r.y + r.h + 2 + i * 7 + rise;
+      // Below the bus when the conductor's bubble is up there, or in the top lane.
+      const y = above >= ROAD_TOP && !this.conductorBubble ? above : r.y + r.h + 2 + i * 7 + rise;
       if (p.age > POPUP_TIME - 0.25) this.ctx.globalAlpha = Math.max(0, (POPUP_TIME - p.age) / 0.25);
       this.text(p.text, x, y, p.color, 1, 'left', true);
+      if (p.ko && this.comboShow.n >= 2) {
+        // Combo counter in the bigger font, with a little pop when it goes up.
+        const cs = this.comboShow;
+        const pop = cs.age < 0.08 ? -1 : 0;
+        this.text(`x${cs.n}`, x + tw + 3, y - 1 + pop, cs.n >= 4 ? '#ff5ad8' : '#ffe060', 1, 'left', true, FONT_BIG);
+      }
       this.ctx.globalAlpha = 1;
     });
 

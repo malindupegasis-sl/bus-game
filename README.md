@@ -27,13 +27,20 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 ## Gameplay extras (v2)
 
 - **Lime and chilli:** collect 2 chillies to hang the charm on the bus (it saves you from one
-  crash), then a lime appears; collect it for the **Dham Rajina Xpress** boost: 6 s invincible,
+  crash), then a lime appears; collect it for the **Dham Rajina Xpress** boost: 11 s,
   road 1.3x, double score, chipmunk music. Pickups are never placed where collecting one forces
   a crash.
+- **Knockouts:** during the boost the bus knocks vehicles off the road instead of crashing:
+  +25 each (+50 with the boost's double score), with a combo counter (x2, x3…) for hits within
+  2 s of each other. Lorries tip over and spill their cargo, tuk-tuks spin off the top of the
+  screen swearing, convoy SUVs scatter like bowling pins ("I'LL SUE!!"), rival buses spin and slide
+  off backwards, and the family motorbike swerves onto the verge (fists shaken, dog barking).
+  A knocked-off vehicle leaves the world at once, so it can never cause a crash.
 - **Politician's convoy:** 5 SUVs in one lane after the warm-up, rarely (30 s cooldown).
 - **Rival buses** on your route: overtake one for +50.
 - **Captions** explain each thing the first time it appears in a run.
-- **Debug overlay:** tap the HUD score 5 times (FPS, music and charm status).
+- **Debug overlay:** tap the HUD score 5 times (FPS, music, charm and knockout status), with a
+  SCREEN SHAKE on/off button for the small knockout shake (remembered on the device).
 
 The boost bus is an affectionate parody with its own livery; it doesn't copy any real operator's
 paint job or logo. The politician is fictional.
