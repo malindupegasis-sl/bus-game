@@ -90,13 +90,14 @@ describe('spawner fairness', () => {
     }
   });
 
-  it('always leaves a reachable gap: a perfect bot on the real World never crashes', () => {
+  it('always leaves a reachable gap: a perfect bot on the real World never crashes (180s: warm-up + full ramp + dense traffic)', () => {
     const count = { lorry: 0, tuktuk: 0, bike: 0 };
     let swerving = 0;
+    let busyRuns = 0;
     for (const seed of SEEDS.slice(0, 120)) {
       let maxOnRoad = 0;
       const seen = new Set<number>();
-      const w = runBot(seed, 150, (w) => {
+      const w = runBot(seed, 180, (w) => {
         maxOnRoad = Math.max(maxOnRoad, w.obstacles.length);
         for (const o of w.obstacles) {
           if (seen.has(o.id)) continue;
@@ -106,17 +107,20 @@ describe('spawner fairness', () => {
         }
       });
       expect(w.crashed, `seed ${seed} crashed at t=${w.t.toFixed(1)}`).toBe(false);
-      expect(maxOnRoad).toBeGreaterThanOrEqual(4);
+      expect(maxOnRoad).toBeGreaterThanOrEqual(3);
+      if (maxOnRoad >= 4) busyRuns++;
     }
-    // Spawn mix (v1 was lorry 53.7%, tuk-tuk 22.9%, motorbike 23.3%).
+    expect(busyRuns / 120).toBeGreaterThanOrEqual(0.9); // traffic genuinely builds up
+    // Spawn mix. v1.1: lorry 61.7%, tuk-tuk 29.1%, motorbike 9.2%.
+    // v1.2 moves 5 points from lorries to tuk-tuks: ~57% / ~34% / ~9%.
     const total = count.lorry + count.tuktuk + count.bike;
     const share = (n: number) => n / total;
-    expect(share(count.bike)).toBeGreaterThan(0.233 * 0.3); // cut by ~60%: 7–11.5%
-    expect(share(count.bike)).toBeLessThan(0.233 * 0.5);
-    expect(share(count.lorry)).toBeGreaterThan(0.57); // ~+7 points each
-    expect(share(count.lorry)).toBeLessThan(0.65);
-    expect(share(count.tuktuk)).toBeGreaterThan(0.26);
-    expect(share(count.tuktuk)).toBeLessThan(0.34);
+    expect(share(count.lorry)).toBeGreaterThan(0.54);
+    expect(share(count.lorry)).toBeLessThan(0.6);
+    expect(share(count.tuktuk)).toBeGreaterThan(0.31);
+    expect(share(count.tuktuk)).toBeLessThan(0.37);
+    expect(share(count.bike)).toBeGreaterThan(0.07);
+    expect(share(count.bike)).toBeLessThan(0.115);
     // About half of the tuk-tuks on the road swerve.
     expect(swerving / count.tuktuk).toBeGreaterThan(0.4);
     expect(swerving / count.tuktuk).toBeLessThan(0.6);

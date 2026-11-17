@@ -32,9 +32,13 @@ export const KINDS: Record<ObstacleKind, KindSpec> = {
   bike: { width: 34, height: 26, hitX0: 4, hitX1: 30, halfH: 6, speedFactor: [0.42, 0.5] },
 };
 
-/** Bus hitbox (relative to the bus sprite's left edge at BUS_X). Sprite is 48×22. */
-export const BUS_HIT = { x0: 4, x1: 44, halfH: 7 } as const;
-export const BUS_SPRITE_W = 48;
+/**
+ * Bus hitbox, relative to the bus sprite's left edge at BUS_X. The sprite is 62×27 (30% bigger
+ * than v1.1's 48×22); the hitbox keeps v1.1's proportions: ~84% of the length, about two thirds
+ * of the height, so near misses still feel fair.
+ */
+export const BUS_HIT = { x0: 5, x1: 57, halfH: 9 } as const;
+export const BUS_SPRITE_W = 62;
 
 /** Tuk-tuk swerve rules (seconds are at the speed it spawned at). */
 export const TUK_TELL_TIME = 0.7; // blinker + hop before the swerve

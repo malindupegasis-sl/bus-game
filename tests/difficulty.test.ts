@@ -4,12 +4,55 @@ import {
   DIFFICULTY, kindWeightsAt, maxObstaclesAt, musicRateForSpeed, rampProgress, spawnGapAt, speedAt,
 } from '../src/game/difficulty';
 
-const times = Array.from({ length: 400 }, (_, i) => i * 0.5);
+const W = DIFFICULTY.warmupTime;
+const times = Array.from({ length: 500 }, (_, i) => i * 0.5);
+
+/** The v1.1 ramp, copied verbatim, so we can prove v1.2 is the same curve shifted by the warm-up. */
+const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const v11 = {
+  speed: (t: number) => lerp(110, 230, 1 - (1 - clamp01(t / 90)) ** 2),
+  gap: (t: number) => (t <= 90 ? lerp(1.3, 0.62, clamp01(t / 90)) : lerp(0.62, 0.45, clamp01((t - 90) / 60))),
+  max: (t: number) => Math.round(lerp(2, 6, clamp01(t / 150))),
+};
+
+describe('warm-up', () => {
+  it('lasts 30 seconds', () => expect(W).toBe(30));
+
+  it('holds speed and traffic density at the starting level for the first 30s', () => {
+    for (let t = 0; t <= W; t += 0.25) {
+      expect(speedAt(t)).toBe(DIFFICULTY.startSpeed);
+      expect(spawnGapAt(t)).toBe(DIFFICULTY.gapStart);
+      expect(maxObstaclesAt(t)).toBe(DIFFICULTY.maxObstaclesStart);
+      expect(rampProgress(t)).toBe(0);
+    }
+  });
+
+  it('keeps the song at normal speed during the warm-up', () => {
+    for (let t = 0; t <= W; t += 0.25) expect(musicRateForSpeed(speedAt(t))).toBe(1);
+  });
+
+  it('then runs the v1.1 ramp unchanged, 30 seconds later (same curve and caps)', () => {
+    for (let x = 0; x <= 400; x += 0.37) {
+      expect(speedAt(W + x)).toBeCloseTo(v11.speed(x), 9);
+      expect(spawnGapAt(W + x)).toBeCloseTo(v11.gap(x), 9);
+      expect(maxObstaclesAt(W + x)).toBe(v11.max(x));
+    }
+    expect(DIFFICULTY).toMatchObject({
+      startSpeed: 110, maxSpeed: 230, rampTime: 90, denseTime: 150,
+      gapStart: 1.3, gapAtRamp: 0.62, gapMin: 0.45, maxObstaclesStart: 2, maxObstaclesEnd: 6,
+    });
+  });
+
+  it('starts ramping straight after the warm-up (no flat spot)', () => {
+    expect(speedAt(W + 1)).toBeGreaterThan(DIFFICULTY.startSpeed);
+    expect(spawnGapAt(W + 1)).toBeLessThan(DIFFICULTY.gapStart);
+  });
+});
 
 describe('difficulty ramp', () => {
-  it('starts at the start speed and reaches max speed at the end of the ramp', () => {
-    expect(speedAt(0)).toBe(DIFFICULTY.startSpeed);
-    expect(speedAt(DIFFICULTY.rampTime)).toBeCloseTo(DIFFICULTY.maxSpeed);
+  it('reaches max speed at warm-up + ramp time, and stays there', () => {
+    expect(speedAt(W + DIFFICULTY.rampTime)).toBeCloseTo(DIFFICULTY.maxSpeed);
     expect(speedAt(10_000)).toBeCloseTo(DIFFICULTY.maxSpeed);
   });
 
@@ -21,46 +64,41 @@ describe('difficulty ramp', () => {
   });
 
   it('ramps gradually: no big jump between frames', () => {
-    for (let t = 0; t < 120; t += 1 / 60) {
-      expect(speedAt(t + 1 / 60) - speedAt(t)).toBeLessThan(0.1);
-    }
-    expect(rampProgress(DIFFICULTY.rampTime / 2)).toBeGreaterThan(0.5);
+    for (let t = 0; t < 160; t += 1 / 60) expect(speedAt(t + 1 / 60) - speedAt(t)).toBeLessThan(0.1);
   });
 
-  it('spawn gap shrinks over time (more obstacles) and bottoms out', () => {
-    for (let i = 1; i < times.length; i++) {
-      expect(spawnGapAt(times[i])).toBeLessThanOrEqual(spawnGapAt(times[i - 1]));
-    }
-    expect(spawnGapAt(0)).toBe(DIFFICULTY.gapStart);
-    expect(spawnGapAt(DIFFICULTY.denseTime)).toBeCloseTo(DIFFICULTY.gapMin);
+  it('spawn gap never grows and bottoms out at the cap', () => {
+    for (let i = 1; i < times.length; i++) expect(spawnGapAt(times[i])).toBeLessThanOrEqual(spawnGapAt(times[i - 1]));
+    expect(spawnGapAt(W + DIFFICULTY.denseTime)).toBeCloseTo(DIFFICULTY.gapMin);
     expect(spawnGapAt(10_000)).toBeCloseTo(DIFFICULTY.gapMin);
   });
 
-  it('allows more simultaneous obstacles over time', () => {
-    expect(maxObstaclesAt(0)).toBe(DIFFICULTY.maxObstaclesStart);
+  it('allows more simultaneous obstacles over time, up to the cap', () => {
     expect(maxObstaclesAt(10_000)).toBe(DIFFICULTY.maxObstaclesEnd);
-    for (let i = 1; i < times.length; i++) {
-      expect(maxObstaclesAt(times[i])).toBeGreaterThanOrEqual(maxObstaclesAt(times[i - 1]));
-    }
+    for (let i = 1; i < times.length; i++) expect(maxObstaclesAt(times[i])).toBeGreaterThanOrEqual(maxObstaclesAt(times[i - 1]));
   });
+});
 
-  it('v1.1 mix weights: motorbikes cut by 60%, lorries and tuk-tuks take the share', () => {
-    const w = kindWeightsAt(60);
-    expect(w.bike).toBeCloseTo(0.45 * 0.4);
-    expect(w.lorry).toBeGreaterThan(1);
-    expect(w.tuktuk).toBeGreaterThan(w.bike);
-  });
-
-  it('introduces tuk-tuks after a short warm-up', () => {
+describe('traffic mix weights', () => {
+  it('tuk-tuks arrive after 8s on the real clock (they appear during the warm-up)', () => {
     expect(kindWeightsAt(0).tuktuk).toBe(0);
-    expect(kindWeightsAt(60).tuktuk).toBeGreaterThan(0);
+    expect(kindWeightsAt(20).tuktuk).toBeGreaterThan(0);
   });
 
-  it('music speeds up with the game but is capped at 1.25x', () => {
+  it('v1.2: weight moved from lorries to tuk-tuks; motorbikes about the same', () => {
+    const w = kindWeightsAt(60);
+    expect(w.lorry).toBeLessThan(1.4); // v1.1 was 1.4
+    expect(w.tuktuk).toBeGreaterThan(0.75); // v1.1 was 0.75
+    expect(w.bike).toBeGreaterThan(0.15);
+    expect(w.bike).toBeLessThan(0.2);
+  });
+});
+
+describe('music rate', () => {
+  it('speeds up with the game but is capped at 1.25x', () => {
     expect(MAX_MUSIC_RATE).toBe(1.25);
     expect(musicRateForSpeed(DIFFICULTY.startSpeed)).toBe(1);
     expect(musicRateForSpeed(DIFFICULTY.maxSpeed)).toBeCloseTo(1.25);
     expect(musicRateForSpeed(10_000)).toBe(1.25);
-    expect(musicRateForSpeed(170)).toBeGreaterThan(1);
   });
 });

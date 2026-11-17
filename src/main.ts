@@ -187,6 +187,8 @@ requestAnimationFrame(frame);
 const hook: Record<string, unknown> = {
   snapshot: () => ({
     phase: game.phase,
+    t: game.world.t,
+    speed: game.world.speed,
     target: game.world.bus.target,
     pos: game.world.bus.pos,
     score: game.world.score,

@@ -20,7 +20,8 @@ export const PALETTE: Record<string, string> = {
   B: '#0058f8', // blue stripe
   b: '#3cbcfc', // glass
   w: '#c4f0fc', // glass glint
-  Y: '#fca044', // orange glow (sign board)
+  Y: '#fca044', // orange glow
+  O: '#fca044', // bus sign-board glow (flickers: see BUS_GLOW)
   y: '#f8b800', // amber / yellow
   V: '#f8d878', // pale yellow
   N: '#00a800', // green
@@ -69,6 +70,15 @@ export const SCENE = {
   overlay: 'rgba(0,0,0,0.55)',
 };
 
+/** Sign-board glow levels the renderer flickers between. */
+export const BUS_GLOW = ['#f87800', '#fca044', '#fcc070', '#fca044'] as const;
+
+/** Bus wheels (drawn procedurally so they spin): centres relative to the body, radius in px. */
+export const BUS_WHEELS = { xs: [13, 50], y: 22, r: 4 } as const;
+export const BUS_BODY_H = 22;
+/** Full bus height including wheels (body rows 0–21, wheels down to row 26). */
+export const BUS_H = BUS_WHEELS.y + BUS_WHEELS.r + 1;
+
 /** Palette overrides for the bus. "party" is ready for the future boost form. */
 export const BUS_SKINS: Record<string, Partial<Record<string, string>>> = {
   classic: {},
@@ -78,29 +88,30 @@ export const BUS_SKINS: Record<string, Partial<Record<string, string>>> = {
 export type SpriteName = keyof typeof SPRITES;
 
 export const SPRITES = {
+  /** Player bus body, 62×22. Wheels are drawn by the renderer (they spin). 'O' = flickering glow. */
   bus: [
-    '...KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK.',
-    '..KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKYKYKKYKYKK.',
-    'KhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKrYrYYrYrYK.',
-    'KrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrKKKKKKKKKKKK',
-    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCYCYCYCYCK',
-    'KRRwwbbbRwwbbbRwwbbbRwwbbbRwwbbbKKKKKRKKKKKKKKKK',
-    'KRRwbbbbRwbbbbRwbbbbRwbbbbRwbbbbKwbbKRKwwbbbbbKK',
-    'KRRbbbbbRbbbbbRbbbbbRbbbbbRbbbbbKbbbKRKwbbbbbbKK',
-    'KRRbbbbbRbbbbbRbbbbbRbbbbbRbbbbbKbbbKRKbbbbbbbKK',
-    'KRRbbbbbRbbbbbRbbbbbRbbbbbRbbbbbKbbbKRKbbbbbbbKK',
-    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKbbbKRKKKKKKKKKK',
-    'KGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGKDDDKCCCCCCCCCCK',
-    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBKDDDKGGGGGGGGGGK',
-    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBKGGGKBBBBBBBBBBK',
-    'rRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRKDDDKRRRRRRRRRLy',
-    'rrRRRRKKKKKKKKKRRRRRRRRRRRRRRRRRKDDKKKKKKKKKRRLL',
-    'KrrrrrKKKDDDKKKrrrrrrrrrrrrrrrrrrrrKKKDDDKKKrrrK',
-    'KKKKKKKKDGGGDKKKKKKKKKKKKKKKKKKKKKKKKDGGGDKKKKKK',
-    '.ggggggKDGgGDK......................KDGgGDKGGGGG',
-    '.......KDGGGDK......................KDGGGDKKKKKK',
-    '........KDDDK........................KDDDK......',
-    '.........KKK..........................KKK.......',
+    '...KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+    '.KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKOOOKOKOOOKOOOKK',
+    'KhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKKOKOKOOOKOKOKOKK',
+    'KrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrKKOOOKOKOKOKOOOKK',
+    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKKKKKKKKKKKKKKKKK',
+    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCOCOCOCOCOCOCCK',
+    'KRRwwbbbbRwwbbbbRwwbbbbRwwbbbbRwwbbbbRRRKKKKKKRKKKKKKKKKKKKKKK',
+    'KRRwbbbbbRwbbbbbRwbbbbbRwbbbbbRwbbbbbRRRKwbbbKRKwwwbbbbbbbbbbK',
+    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKwbbbbbbbbbbbbK',
+    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
+    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
+    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
+    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
+    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCRKDDDDKRKKKKKKKKKKKKKKK',
+    'KGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGRKDDDDKCCCCCCCCCCCCCCCK',
+    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBRKGGGGKGGGGGGGGGGGGGGGK',
+    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBRKDDDDKBBBBBBBBBBBBBBBK',
+    'rRRRRRRRKKKKKKKKKKKRRRRRRRRRRRRRRRRRRRRRKDDDDKKKKKKKKKKKRRRRLy',
+    'rrRRRRRRKKKKKKKKKKKRRRRRRRRRRRRRRRRRRRRRKDDDDKKKKKKKKKKKRRRRLL',
+    'KrrrrrrrKKKKKKKKKKKrrrrrrrrrrrrrrrrrrrrrrrrrrKKKKKKKKKKKrrrrrK',
+    'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+    'gDDDggg.............................................GGGGGGGGGG',
   ],
   lorry: [
     '..............................................',
@@ -255,6 +266,11 @@ export const FONT_SMALL: Font = buildFont({
   ',': ['..', '..', '..', '.#', '#.'],
   ':': ['.', '#', '.', '#', '.'],
   "'": ['#', '#', '.', '.', '.'],
+  '@': ['.###.', '#.#.#', '#.###', '#....', '.###.'],
+  '#': ['.#.#.', '#####', '.#.#.', '#####', '.#.#.'],
+  $: ['.####', '#.#..', '.###.', '..#.#', '####.'],
+  '%': ['#...#', '...#.', '..#..', '.#...', '#...#'],
+  '&': ['.##..', '#....', '.##.#', '#..#.', '.##.#'],
 });
 
 /** 5×7 title font. */

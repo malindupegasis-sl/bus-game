@@ -2,13 +2,15 @@
 export const VIEW_W = 256;
 export const VIEW_H = 144;
 
-/** Road geometry (logical pixels). */
+/** Road geometry (logical pixels). Lanes are 28px so the 27px-tall bus fits inside one. */
 export const LANE_COUNT = 3;
-export const LANE_HEIGHT = 24;
-export const ROAD_TOP = 28;
-export const LANE_CENTER_Y = [40, 64, 88] as const;
+export const LANE_HEIGHT = 28;
+export const ROAD_TOP = 16;
+export const LANE_CENTER_Y = [30, 58, 86] as const;
 export const ROAD_BOTTOM = ROAD_TOP + LANE_HEIGHT * LANE_COUNT; // 100
 export const HUD_TOP = 112;
+/** Vehicles are drawn with their bottom pixel row here, relative to the lane centre. */
+export const VEHICLE_BASELINE = 13;
 
 /** Bus placement and feel. */
 export const BUS_X = 12;

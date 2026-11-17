@@ -40,7 +40,9 @@ Music: *Nandana Sihina Gange* by Sangeeth Wijesuriya (`public/audio/song.mp3`).
 | Path | What |
 | --- | --- |
 | `src/config.ts` | Resolution (256×144), lane geometry, timings, share link |
-| `src/game/difficulty.ts` | Speed, spawn rate, and obstacle mix over time (pure) |
+| `src/game/difficulty.ts` | 30s warm-up, then speed / spawn-rate ramp; obstacle mix (pure) |
+| `src/game/bubble.ts` | Tuk-tuk swearing bubble: text pick and placement (never over the target lane) |
+| `src/render/busPose.ts` | Bus bounce, lean, wheel spin and glow flicker (always inside its lane) |
 | `src/game/obstacles.ts` | Obstacle kinds registry: size, hitbox, speed, tuk-tuk swerve |
 | `src/game/fairness.ts` | Lane-occupancy model and the "is there still a way through?" search |
 | `src/game/spawner.ts` | Seeded spawner; rejects any spawn that would close the last gap |

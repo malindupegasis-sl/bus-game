@@ -24,7 +24,7 @@ describe('sprites', () => {
       expect(spec.hitX0).toBeGreaterThan(0);
       expect(spec.hitX1).toBeLessThan(spec.width);
     }
-    expect(SPRITES.bus[0].length).toBe(48);
+    expect(SPRITES.bus[0].length).toBe(62);
   });
 
   it('skins only override existing palette keys', () => {

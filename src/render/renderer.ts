@@ -1,12 +1,14 @@
 import {
-  BUS_X, GAME_TITLE, HUD_TOP, MUSIC_CREDIT, KMH_PER_SPEED, LANE_CENTER_Y, LANE_HEIGHT, ROAD_BOTTOM, ROAD_TOP, VIEW_H, VIEW_W, laneY,
+  BUS_X, GAME_TITLE, HUD_TOP, MUSIC_CREDIT, VEHICLE_BASELINE, KMH_PER_SPEED, LANE_CENTER_Y, LANE_HEIGHT, ROAD_BOTTOM, ROAD_TOP, VIEW_H, VIEW_W, laneY,
 } from '../config';
 import type { Game } from '../game/game';
 import { formatScore } from '../game/score';
 import { KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { UI_RECTS, type Rect } from '../ui-layout';
+import { bubbleRect, bubbleWindow } from '../game/bubble';
+import { BUS_W, busPose } from './busPose';
 import {
-  BUS_SKINS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font, type SpriteName,
+  BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font, type SpriteName,
 } from './sprites';
 
 type Align = 'left' | 'center' | 'right';
@@ -211,38 +213,118 @@ export class Renderer {
       list.push({ y: laneY(lane), draw: () => this.obstacle(o, w.d, lane, now) });
     }
     const busY = laneY(w.bus.pos);
-    list.push({ y: busY, draw: () => this.bus(game, busY) });
+    list.push({ y: busY, draw: () => this.bus(game, busY, now) });
     list.sort((a, b) => a.y - b.y);
     for (const e of list) e.draw();
+
+    // Swearing bubbles go on top of everything on the road.
+    for (const o of w.obstacles) if (o.kind === 'tuktuk') this.bubble(o, w.d, now);
 
     if (game.phase === 'crashed' || game.phase === 'over') {
       const blink = Math.floor(now * 12) % 2 === 0;
       const star = this.sprite('crash');
-      const cx = BUS_X + 46 - Math.floor(star.width / 2);
+      const cx = BUS_X + BUS_W - 2 - Math.floor(star.width / 2);
       const cy = Math.round(busY - 4 - star.height / 2);
       if (game.phase === 'crashed' || blink) this.ctx.drawImage(star, cx, cy);
     }
   }
 
-  private bus(game: Game, busY: number): void {
+  // Exhaust puffs (cosmetic particles in screen space).
+  private puffs: { x: number; y: number; age: number }[] = [];
+  private lastPuff = 0;
+  private lastNow = 0;
+
+  private bus(game: Game, busY: number, now: number): void {
     const w = game.world;
-    const img = this.sprite('bus', this.busSkin);
-    const bob = game.phase === 'playing' && Math.floor(w.d / 22) % 3 === 0 ? -1 : 0;
-    const x = BUS_X;
-    const y = Math.round(busY + 10 - img.height) + bob;
-    this.ctx.drawImage(img, x, y);
-    // Spinning hub detail
-    if (!w.crashed) {
-      const spoke = [[0, -1], [1, 0], [0, 1], [-1, 0]][Math.floor(w.d / 4) % 4];
-      for (const wx of [10, 39]) this.rect(x + wx + spoke[0], y + 18 + spoke[1] - bob, 1, 1, PALETTE.D);
+    const live = game.phase === 'playing' || game.phase === 'title';
+    const dt = Math.min(0.1, Math.max(0, now - this.lastNow));
+    this.lastNow = now;
+    const leanDir = w.bus.moving ? Math.sign(w.bus.target - w.bus.pos) : 0;
+    const pose = busPose({ laneY: Math.round(busY), d: w.d, leanDir, live, now });
+
+    // Exhaust: a puff every ~0.12s from the tailpipe, drifting back and up, then fading.
+    const pipeX = BUS_X + 1;
+    const pipeY = pose.bodyTop + 21;
+    if (live && now - this.lastPuff > 0.12) {
+      this.lastPuff = now;
+      this.puffs.push({ x: pipeX, y: pipeY, age: 0 });
     }
+    const drift = 25 + (live ? w.speed * 0.5 : 0);
+    for (const p of this.puffs) {
+      if (game.phase !== 'paused') {
+        p.age += dt;
+        p.x -= drift * dt;
+        p.y -= 6 * dt;
+      }
+    }
+    this.puffs = this.puffs.filter((p) => p.age < 0.6 && p.x > -6);
+    for (const p of this.puffs) {
+      const size = 2 + Math.floor(p.age / 0.15); // 2px → 5px as it drifts and fades
+      this.ctx.globalAlpha = Math.max(0, 0.9 - p.age * 1.3);
+      this.rect(p.x - size / 2, p.y - size / 2, size, size, p.age < 0.15 ? PALETTE.g : PALETTE.G);
+    }
+    this.ctx.globalAlpha = 1;
+
+    // Body, in runs of columns sharing the same bounce/lean offset.
+    const img = this.pixelMap(
+      SPRITES.bus,
+      { ...PALETTE, ...BUS_SKINS[this.busSkin], O: BUS_GLOW[pose.glow] },
+      `bus:${this.busSkin}:${pose.glow}`,
+    );
+    let start = 0;
+    for (let x = 1; x <= BUS_W; x++) {
+      if (x < BUS_W && pose.columnOffset[x] === pose.columnOffset[start]) continue;
+      const wdt = x - start;
+      this.ctx.drawImage(img, start, 0, wdt, img.height, BUS_X + start, pose.bodyTop + pose.columnOffset[start], wdt, img.height);
+      start = x;
+    }
+
+    // Spinning wheels.
+    for (const wx of BUS_WHEELS.xs) this.wheel(BUS_X + wx, pose.wheelY, pose.wheelFrame);
+  }
+
+  private wheel(cx: number, cy: number, frame: number): void {
+    const r = BUS_WHEELS.r;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const q = dx * dx + dy * dy;
+        if (q > r * r + 1) continue;
+        this.rect(cx + dx, cy + dy, 1, 1, q >= (r - 1) * (r - 1) + 1 ? PALETTE.K : PALETTE.D);
+      }
+    }
+    // Spokes rotate through |, /, -, \ as the bus moves.
+    const SPOKES = [[0, -1], [1, -1], [1, 0], [1, 1]];
+    const [sx, sy] = SPOKES[frame];
+    for (const k of [-2, -1, 1, 2]) this.rect(cx + sx * k, cy + sy * k, 1, 1, PALETTE.G);
+    this.rect(cx, cy, 1, 1, PALETTE.L);
+  }
+
+  private bubble(o: Obstacle, d: number, now: number): void {
+    const b = bubbleRect(o, d, (t) => this.textWidth(t));
+    if (!b) return;
+    const win = bubbleWindow(o)!;
+    const age = (d - win[0]) / (win[1] - win[0]);
+    // Pop: a small box for the first moment, then the full bubble with a little bounce.
+    if (age < 0.08) {
+      this.rect(b.x - 1, b.y + 3, 8, 5, PALETTE.K);
+      this.rect(b.x, b.y + 4, 6, 3, PALETTE.L);
+      return;
+    }
+    const y = b.y - (age < 0.18 ? 1 : 0);
+    this.rect(b.x, y, b.w, b.h, PALETTE.K);
+    this.rect(b.x + 1, y + 1, b.w - 2, b.h - 2, PALETTE.L);
+    // Tail on the left edge, pointing back at the tuk-tuk (stays inside the bubble's rows).
+    this.rect(b.x - 2, y + b.h - 4, 2, 2, PALETTE.K);
+    this.rect(b.x - 1, y + b.h - 4, 1, 1, PALETTE.L);
+    const shake = Math.floor(now * 20) % 2;
+    this.text(b.text, b.x + 3 + shake, y + 3, Math.floor(now * 8) % 2 ? PALETTE.R : PALETTE.K, 1, 'left', false);
   }
 
   private obstacle(o: Obstacle, d: number, lane: number, now: number): void {
     const img = this.sprite(o.kind);
     const k = KINDS[o.kind];
     const x = Math.round(obstacleX(o, d));
-    let y = Math.round(laneY(lane) + 10 - img.height);
+    let y = Math.round(laneY(lane) + VEHICLE_BASELINE + 1 - img.height);
     const telling = isTelling(o, d);
     if (telling) {
       // Tell: hop (3px bounces, 4 per second) and lean 1px toward the lane it's about to take.

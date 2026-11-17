@@ -4,7 +4,7 @@
  */
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { deflateSync, crc32 } from 'node:zlib';
-import { PALETTE, SPRITES } from '../src/render/sprites.ts';
+import { BUS_WHEELS, PALETTE, SPRITES } from '../src/render/sprites.ts';
 
 function hex(c: string): [number, number, number] {
   const n = parseInt(c.slice(1), 16);
@@ -46,13 +46,25 @@ function icon(size: number, maskable: boolean): Buffer {
   );
   for (let x = 0; x < G; x++) if (x % 8 < 5) grid[46][x] = '#fcfcfc';
   const bus = SPRITES.bus;
-  const ox = 8;
-  const oy = 44 - bus.length;
+  const ox = 1;
+  const oy = 44 - bus.length - 4;
   bus.forEach((row, y) =>
     [...row].forEach((ch, x) => {
       if (ch !== '.') grid[oy + y][ox + x] = PALETTE[ch];
     }),
   );
+  // Wheels (the game draws these procedurally so they spin)
+  const r = BUS_WHEELS.r;
+  for (const wx of BUS_WHEELS.xs) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const q = dx * dx + dy * dy;
+        if (q > r * r + 1) continue;
+        grid[oy + BUS_WHEELS.y + dy][ox + wx + dx] = q >= (r - 1) * (r - 1) + 1 ? '#000000' : '#4a4a4a';
+      }
+    }
+    grid[oy + BUS_WHEELS.y][ox + wx] = '#fcfcfc';
+  }
   const px = new Uint8Array(size * size * 4);
   const inset = maskable ? 0.1 : 0; // keep the bus inside the maskable safe zone
   for (let y = 0; y < size; y++) {
