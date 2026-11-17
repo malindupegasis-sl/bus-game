@@ -55,7 +55,7 @@ Reference images are style-only: never copy them or commit them.
 - [x] 1.12 Rival same-route buses travelling your way; overtaking one gives +50 with an "OVERTAKE!" popup; no penalty
 - [x] 1.13 First-appearance captions for each obstacle and pickup, short and out of the way
 - [x] 1.14 Tests: convoy fairness (long lane block, always a path), rival bonus scoring, charm states, lucky-charm save, pickups never force a crash
-- [ ] 1.15 Stage 1 checked headless at 390px portrait + landscape, deployed and checked live -> STOP
+- [x] 1.15 Stage 1 checked headless at 390px portrait + landscape, deployed and checked live -> STOP
 
 ### Stage 1 notes
 - Built together (they share the World and renderer), so items 1.1-1.14 landed in one commit rather than one each.
@@ -68,6 +68,10 @@ Reference images are style-only: never copy them or commit them.
 - Pickup safety is checked against all traffic up to the moment it is collected; after that the
   normal rule protects the bus's actual lane.
 - Music speed follows the base difficulty speed, not the boost's 1.3x (found in testing).
+- Live check (10fab55): 81 unit tests; portrait + landscape at 390px; a 45 s live run saw lorries,
+  tuk-tuks, motorbikes, rival buses and a convoy, plus pickups; music never dropped; no page errors.
+  Boost + chipmunk music verified in the dev build from a real lime pickup.
+- **Waiting for the owner to test Stage 1 on the iPhone before starting Stage 2.**
 
 ## Stage 2: bus customisation
 - [ ] 2.1 Garage screen from the start menu: bus colours
