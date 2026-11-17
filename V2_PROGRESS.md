@@ -84,7 +84,7 @@ Reference images are style-only: never copy them or commit them.
 
 ### Before Stage 2
 - [x] 1.21 Convoy schedule: first at ~30 s (after the warm-up), then about every 35 s (±3), never two within 20 s; fairness rule applies (measured: first convoy at 30.1 s on average, ~5 per 3-minute run; core mix unchanged 56.3/34.1/9.6)
-- [ ] 1.22 HUD: remove the route map and analog speedometer; bigger score and digital speed; charm icon stays next to the score; landscape buttons don't cover anything important
+- [x] 1.22 HUD: route map and analog speedometer removed; score and speed in big 12x20 LCD digits (was 8x14); charm icon next to the score; HUD content kept in x 37..219 so landscape thumb buttons never cover it (tested on 10 screen sizes incl. 16:9 667x375 and 568x320)
 
 ## Stage 2: bus customisation
 - [ ] 2.1 Garage screen from the start menu: bus colours

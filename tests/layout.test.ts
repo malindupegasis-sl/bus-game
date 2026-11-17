@@ -66,3 +66,44 @@ describe('thumb button layout', () => {
     });
   }
 });
+
+import { HUD } from '../src/ui-layout';
+import { HUD_TOP } from '../src/config';
+
+describe('HUD', () => {
+  const toScreen = (c: Box, r: { x: number; y: number; w: number; h: number }): Box => {
+    const s = c.w / VIEW_W;
+    return { x: c.x + r.x * s, y: c.y + r.y * s, w: r.w * s, h: r.h * s };
+  };
+  const SCREENS2: [string, number, number, number][] = [
+    ['390×844', 390, 844, 3], ['844×390', 844, 390, 3], ['375×667', 375, 667, 2], ['667×375', 667, 375, 2],
+    ['430×932', 430, 932, 3], ['932×430', 932, 430, 3], ['360×740', 360, 740, 3], ['740×360', 740, 360, 3],
+    ['568×320 (iPhone SE 1st gen)', 568, 320, 2], ['1280×800', 1280, 800, 1],
+  ];
+  for (const [name, w, h, dpr] of SCREENS2) {
+    it(`${name}: the thumb buttons never cover the score, charm icon or speed`, () => {
+      const l = computeLayout(w, h, dpr);
+      for (const r of [HUD.score, HUD.charmIcon, HUD.speed]) {
+        const box = toScreen(l.canvas, r);
+        expect(overlaps(l.up, box), `▲ over ${JSON.stringify(r)}`).toBe(false);
+        expect(overlaps(l.down, box), `▼ over ${JSON.stringify(r)}`).toBe(false);
+      }
+    });
+  }
+
+  it('big digits and the charm icon fit inside their boxes; boxes fit the HUD and do not overlap', () => {
+    const inside = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+      a.x >= b.x && a.y >= b.y && a.x + a.w <= b.x + b.w && a.y + a.h <= b.y + b.h;
+    const digits = (d: { x: number; y: number; n: number }) => ({ x: d.x, y: d.y, w: d.n * HUD.digit.step - (HUD.digit.step - HUD.digit.w), h: HUD.digit.h });
+    expect(inside(digits(HUD.scoreDigits), HUD.score)).toBe(true);
+    expect(inside(digits(HUD.speedDigits), HUD.speed)).toBe(true);
+    expect(inside(HUD.charmIcon, HUD.score)).toBe(true);
+    expect(overlaps(digits(HUD.scoreDigits), HUD.charmIcon)).toBe(false);
+    expect(overlaps(HUD.score, HUD.speed)).toBe(false);
+    for (const r of [HUD.score, HUD.speed]) {
+      expect(r.y).toBeGreaterThanOrEqual(HUD_TOP);
+      expect(r.y + r.h).toBeLessThanOrEqual(VIEW_H);
+    }
+    expect(HUD.digit.h / 14).toBeGreaterThan(1.4); // bigger than the old 8×14 digits
+  });
+});

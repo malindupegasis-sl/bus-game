@@ -9,7 +9,7 @@ import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionK
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
-import { UI_RECTS, type Rect } from '../ui-layout';
+import { HUD, UI_RECTS, type Rect } from '../ui-layout';
 import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
@@ -30,11 +30,6 @@ const CONDUCTOR_TIME = 2;
 /** Deterministic flicker noise in [0, 1) that changes 15 times a second. */
 const flicker = (now: number) => ((Math.imul(Math.floor(now * 15), 2654435761) >>> 0) % 1000) / 1000;
 
-/** Route map polyline (HUD). */
-const ROUTE = (
-  [[89, 23], [93, 15], [99, 12], [104, 16], [110, 17], [114, 10], [119, 7], [125, 11], [130, 14], [135, 7]] as const
-).map(([x, y]) => [x, HUD_TOP + 4 + y] as const);
-const ROUTE_DISTANCE = 9000; // logical px of travel per lap of the mini map
 
 /** Max cosmetic particles alive at once (keeps the per-frame work bounded). */
 const MAX_PUFFS = 24;
@@ -237,29 +232,6 @@ export class Renderer {
     this.text(s, VIEW_W / 2, y, color, scale, 'center', true, FONT_BIG);
   }
 
-  /** Seven-segment LCD digit images (unlit segments drawn faintly), 8×14 each. */
-  private lcdDigit(ch: string): HTMLCanvasElement {
-    return this.layer(`lcd:${ch}`, 8, 14, (g) => {
-      const SEG: Record<string, [number, number, number, number]> = {
-        a: [2, 0, 4, 2], b: [6, 2, 2, 4], c: [6, 8, 2, 4], d: [2, 12, 4, 2],
-        e: [0, 8, 2, 4], f: [0, 2, 2, 4], g: [2, 6, 4, 2],
-      };
-      const DIGITS: Record<string, string> = {
-        '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd',
-        '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', ' ': '',
-      };
-      const on = DIGITS[ch] ?? '';
-      for (const [k, [sx, sy, w, h]] of Object.entries(SEG)) this.rect(sx, sy, w, h, on.includes(k) ? SCENE.lcdOn : SCENE.lcdOff, g);
-    });
-  }
-
-  private lcd(value: string, x: number, y: number): void {
-    for (const ch of value) {
-      this.ctx.drawImage(this.lcdDigit(ch), x, y);
-      x += 10;
-    }
-  }
-
   // ---------------------------------------------------------------- frame
 
   /**
@@ -283,7 +255,7 @@ export class Renderer {
     ctx.restore();
     this.lastFill = ''; // restore() reset fillStyle
     if (game.phase === 'crashed' && game.phaseTime < 0.06) this.rect(0, 0, VIEW_W, HUD_TOP, '#fcfcfc');
-    this.hud(game, now, d);
+    this.hud(game, now);
     this.screens(game, now);
   }
 
@@ -874,10 +846,36 @@ export class Renderer {
 
   // ---------------------------------------------------------------- HUD
 
+  /** Big seven-segment LCD digit (12×20), unlit segments drawn faintly. */
+  private lcdBigDigit(ch: string): HTMLCanvasElement {
+    const { w, h } = HUD.digit;
+    return this.layer(`lcdBig:${ch}`, w, h, (g) => {
+      const t = 2;
+      const v = (h - 3 * t) / 2; // vertical segment length (7)
+      const SEG: Record<string, [number, number, number, number]> = {
+        a: [t, 0, w - 2 * t, t], b: [w - t, t, t, v], c: [w - t, 2 * t + v, t, v], d: [t, h - t, w - 2 * t, t],
+        e: [0, 2 * t + v, t, v], f: [0, t, t, v], g: [t, t + v, w - 2 * t, t],
+      };
+      const DIGITS: Record<string, string> = {
+        '0': 'abcdef', '1': 'bc', '2': 'abged', '3': 'abgcd', '4': 'fgbc', '5': 'afgcd',
+        '6': 'afgedc', '7': 'abc', '8': 'abcdefg', '9': 'abcdfg', ' ': '',
+      };
+      const on = DIGITS[ch] ?? '';
+      for (const [k, [sx, sy, sw, sh]] of Object.entries(SEG)) this.rect(sx, sy, sw, sh, on.includes(k) ? SCENE.lcdOn : SCENE.lcdOff, g);
+    });
+  }
+
+  private lcdBig(value: string, x: number, y: number): void {
+    for (const ch of value) {
+      this.ctx.drawImage(this.lcdBigDigit(ch), x, y);
+      x += HUD.digit.step;
+    }
+  }
+
   /** Everything in the HUD that never changes, rendered once. */
   private hudPanel(): HTMLCanvasElement {
     const top = HUD_TOP;
-    return this.layer('hudPanel', VIEW_W, VIEW_H - top, (g) => {
+    return this.layer('hudPanel2', VIEW_W, VIEW_H - top, (g) => {
       const R = (x: number, y: number, w: number, h: number, c: string) => this.rect(x, y - top, w, h, c, g);
       R(0, top, VIEW_W, VIEW_H - top, SCENE.hud);
       R(0, top, VIEW_W, 1, PALETTE.K);
@@ -887,72 +885,30 @@ export class Renderer {
         R(bx, top + 4, 2, 2, SCENE.hudDark);
         R(bx, VIEW_H - 5, 2, 2, SCENE.hudDark);
       }
-      const BH = 23;
-      const box = (x: number, y: number, w: number, h: number, fill: string) => {
-        R(x - 1, y - 1, w + 2, h + 2, PALETTE.K);
-        R(x, y, w, h, fill);
-        R(x, y + h, w, 1, SCENE.hudDark);
+      const box = (r: { x: number; y: number; w: number; h: number }) => {
+        R(r.x, r.y, r.w, r.h, PALETTE.K);
+        R(r.x + 1, r.y + 1, r.w - 2, r.h - 2, SCENE.lcdBg);
+        R(r.x + 1, r.y + r.h - 1, r.w - 2, 1, SCENE.hudDark);
       };
-      box(6, top + 3, 68, BH, SCENE.lcdBg);
-      g.drawImage(this.textImage('SCORE', SCENE.lcdOn, 1, false, FONT_SMALL), 9, 4);
-      box(84, top + 3, 56, BH, SCENE.mapBg);
-      for (let i = 1; i < ROUTE.length; i++) {
-        const a = ROUTE[i - 1];
-        const b = ROUTE[i];
-        const steps = Math.max(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]), 1);
-        for (let s = 0; s <= steps; s++) {
-          const t = s / steps;
-          R(Math.round(a[0] + (b[0] - a[0]) * t), Math.round(a[1] + (b[1] - a[1]) * t), 2, 2, SCENE.mapRoad);
-        }
-      }
-      R(ROUTE[0][0] - 1, ROUTE[0][1] - 1, 3, 3, PALETTE.L);
-      const end = ROUTE[ROUTE.length - 1];
-      R(end[0], end[1] - 5, 1, 6, PALETTE.K);
-      R(end[0] + 1, end[1] - 5, 3, 2, PALETTE.y);
-      box(146, top + 3, 52, BH, SCENE.lcdBg);
-      const cx = 171;
-      const cy = top + 24;
-      for (let a = 0; a <= 12; a++) {
-        const ang = Math.PI + (a / 12) * Math.PI;
-        const r = a % 3 === 0 ? 17 : 18;
-        R(Math.round(cx + Math.cos(ang) * 19), Math.round(cy + Math.sin(ang) * 19), 1, 1, SCENE.lcdOff);
-        R(Math.round(cx + Math.cos(ang) * r), Math.round(cy + Math.sin(ang) * r), 1, 1, a >= 10 ? PALETTE.R : SCENE.lcdOn);
-      }
-      box(202, top + 3, 48, BH, SCENE.lcdBg);
+      box(HUD.score);
+      box(HUD.speed);
+      const label = (t: string, x: number, y: number) =>
+        g.drawImage(this.textImage(t, SCENE.lcdOn, 1, false, FONT_SMALL), x, y - top);
+      label('SCORE', HUD.score.x + 3, top + 5);
+      label('HI', HUD.score.x + 3, top + 12);
       const kmh = this.textImage('KM/H', SCENE.lcdOn, 1, false, FONT_SMALL);
-      g.drawImage(kmh, 247 - kmh.width, 20);
+      g.drawImage(kmh, HUD.speed.x + HUD.speed.w - 3 - kmh.width, top + 19 - top);
     });
   }
 
-  /** Speedometer needle for a given km/h, cached per value. */
-  private needle(kmh: number): HTMLCanvasElement {
-    return this.layer(`needle:${kmh}`, 32, 18, (g) => {
-      const cx = 16;
-      const cy = 16;
-      const ang = Math.PI + Math.min(1, kmh / 120) * Math.PI;
-      const ex = cx + Math.cos(ang) * 14;
-      const ey = cy + Math.sin(ang) * 14;
-      const steps = Math.max(Math.abs(ex - cx), Math.abs(ey - cy), 1);
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        this.rect(Math.round(cx + (ex - cx) * t), Math.round(cy + (ey - cy) * t), 1, 1, PALETTE.y, g);
-      }
-      this.rect(cx - 1, cy - 1, 3, 3, PALETTE.L, g);
-    });
-  }
-
-  private hud(game: Game, now: number, d: number): void {
+  private hud(game: Game, now: number): void {
     const w = game.world;
-    const top = HUD_TOP;
-    this.ctx.drawImage(this.hudPanel(), 0, top);
-    this.text(`HI ${game.highScore}`, 71, top + 4, SCENE.lcdOn, 1, 'right', false);
-    this.lcd(String(Math.min(99999, w.score)).padStart(5, ' '), 10, top + 10);
-    this.charmIcon(game, now, 62, top + 10);
-    const [px, py] = this.routePoint((d % ROUTE_DISTANCE) / ROUTE_DISTANCE);
-    if (Math.floor(now * 4) % 2 === 0 || game.phase !== 'playing') this.rect(px - 1, py - 1, 3, 3, SCENE.mapDot);
+    this.ctx.drawImage(this.hudPanel(), 0, HUD_TOP);
+    this.text(String(Math.min(99999, game.highScore)), HUD.score.x + 3, HUD_TOP + 18, SCENE.lcdOn, 1, 'left', false);
+    this.lcdBig(String(Math.min(99999, w.score)).padStart(HUD.scoreDigits.n, ' '), HUD.scoreDigits.x, HUD.scoreDigits.y);
+    this.charmIcon(game, now, HUD.charmIcon.x, HUD.charmIcon.y);
     const kmh = Math.round(w.crashed || game.phase === 'title' ? 0 : w.speed * KMH_PER_SPEED);
-    this.ctx.drawImage(this.needle(kmh), 171 - 16, top + 24 - 16);
-    this.lcd(String(kmh).padStart(3, ' '), 205, top + 5);
+    this.lcdBig(String(Math.min(999, kmh)).padStart(HUD.speedDigits.n, ' '), HUD.speedDigits.x, HUD.speedDigits.y);
   }
 
   /** HUD charm progress: ghost (empty), 1 chilli, 2 chillies, complete + blinking while boosted. */
@@ -976,16 +932,6 @@ export class Renderer {
     this.ctx.drawImage(img, x, y);
   }
 
-  private routePoint(p: number): [number, number] {
-    const segs = ROUTE.length - 1;
-    const f = p * segs;
-    const i = Math.min(segs - 1, Math.floor(f));
-    const t = f - i;
-    return [
-      Math.round(ROUTE[i][0] + (ROUTE[i + 1][0] - ROUTE[i][0]) * t),
-      Math.round(ROUTE[i][1] + (ROUTE[i + 1][1] - ROUTE[i][1]) * t),
-    ];
-  }
 
   // ---------------------------------------------------------------- screens
 

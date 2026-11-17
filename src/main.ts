@@ -1,6 +1,6 @@
 import './style.css';
 import { AudioManager } from './audio/audio';
-import { HUD_TOP, VIEW_H, VIEW_W } from './config';
+import { VIEW_H, VIEW_W } from './config';
 import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
@@ -8,7 +8,7 @@ import { Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
-import { UI_RECTS, type Rect } from './ui-layout';
+import { HUD, UI_RECTS, type Rect } from './ui-layout';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -66,7 +66,7 @@ layout();
 // ------------------------------------------------------------ debug overlay
 
 /** The HUD score box, in logical px (tap it 5 times to toggle the overlay). */
-const SCORE_BOX = { x: 4, y: HUD_TOP + 1, w: 72, h: VIEW_H - HUD_TOP - 1 };
+const SCORE_BOX = HUD.score;
 
 function isOnScore(clientX: number, clientY: number): boolean {
   const r = canvas.getBoundingClientRect();
