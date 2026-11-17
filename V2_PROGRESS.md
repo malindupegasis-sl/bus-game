@@ -137,7 +137,8 @@ Reference images are style-only: never copy them or commit them.
 - [x] K.5 Outside the boost nothing changes (crash ends the run or uses the lucky charm; the charm's blink still passes through)
 - [x] K.6 Tests: knockout scoring, boost doubling, combo window, several hits in one step, charm/crash unchanged outside the boost, a 35 s boost through heavy traffic on 10 seeds (knocked-off vehicles never return or cause a crash), effect pools fixed-size, every wreck leaves the screen within 2 s; fairness tests unchanged (116 tests)
 - [x] K.7 Performance: 60 fps (no frame over 20 ms) with a knockout every ~150 ms, 4x CPU throttle, 390x844 @3x
-- [ ] K.8 Deployed and checked live in WebKit and Chromium -> STOP for phone testing
+- [x] K.8 Deployed and checked live in WebKit and Chromium (7344dc4): portrait + landscape in both engines: loads clean, live hook still read-only, debug overlay SCREEN SHAKE button toggles, doesn't steer and is remembered after reload, normal crash outside the boost, no page errors; WebKit play checks and the rotation stress test re-run and passed
+- **Waiting for the owner to test on the iPhone (Safari and Chrome).**
 
 Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 
