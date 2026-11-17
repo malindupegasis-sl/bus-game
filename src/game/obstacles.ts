@@ -33,12 +33,12 @@ export const KINDS: Record<ObstacleKind, KindSpec> = {
 };
 
 /**
- * Bus hitbox, relative to the bus sprite's left edge at BUS_X. The sprite is 62×27 (30% bigger
- * than v1.1's 48×22); the hitbox keeps v1.1's proportions: ~84% of the length, about two thirds
- * of the height, so near misses still feel fair.
+ * Bus hitbox, relative to the bus sprite's left edge at BUS_X. The sprite is 74×32 (v1.3, 20%
+ * bigger than v1.2's 62×27); the hitbox keeps the same proportions: ~84% of the length and about
+ * two thirds of the height, so near misses still feel fair.
  */
-export const BUS_HIT = { x0: 5, x1: 57, halfH: 9 } as const;
-export const BUS_SPRITE_W = 62;
+export const BUS_HIT = { x0: 6, x1: 68, halfH: 11 } as const;
+export const BUS_SPRITE_W = 74;
 
 /** Tuk-tuk swerve rules (seconds are at the speed it spawned at). */
 export const TUK_TELL_TIME = 0.7; // blinker + hop before the swerve
@@ -49,9 +49,10 @@ export const TUK_TELL_TIME = 0.7; // blinker + hop before the swerve
  */
 export const TUK_MIN_TELL_TIME = 0.42;
 export const TUK_SWERVE_TIME = 0.28;
-/** Chance a new tuk-tuk plans a swerve. 0.6 because the fairness check rejects swerving tuk-tuks
- *  more often (they occupy two lanes); the share that actually swerves on the road is ~50%. */
-export const TUK_SWERVE_CHANCE = 0.6;
+/** Chance a new tuk-tuk plans a swerve. Above 0.5 because the fairness check rejects swerving
+ *  tuk-tuks more often (they occupy two lanes, and the v1.3 bus is longer); the share that
+ *  actually swerves on the road is ~50% (measured 52.5%). */
+export const TUK_SWERVE_CHANCE = 0.7;
 /** The tell only starts once at least half the tuk-tuk is on screen (sprite-left x). */
 export const TUK_TELL_MAX_X = 256 - 12;
 /** The swerve must start while the tuk-tuk's centre is still in the right half (sprite-left x). */

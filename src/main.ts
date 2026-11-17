@@ -46,6 +46,7 @@ function layout(): void {
   setBox(btnUp, l.up);
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
+  renderer.pixelScale = l.canvas.w / VIEW_W;
 }
 
 function place(el: HTMLElement, r: Rect, grow = 0): void {

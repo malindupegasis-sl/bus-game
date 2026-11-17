@@ -8,7 +8,7 @@ import type { ObstacleKind } from './obstacles';
  * holds while traffic keeps getting denser until DENSE_TIME (both measured from the warm-up's end).
  */
 export const DIFFICULTY = {
-  warmupTime: 30, // seconds at the starting speed and density
+  warmupTime: 20, // seconds at the starting speed and density
   startSpeed: 110, // logical px/s
   maxSpeed: 230,
   rampTime: 90,
@@ -59,9 +59,11 @@ export function maxObstaclesAt(t: number): number {
  *   v1.1: lorry 61.7%, tuk-tuk 29.1%, motorbike  9.2%  (motorbikes −60%, freed share split evenly)
  *   v1.2: lorry 56.3%, tuk-tuk 34.1%, motorbike  9.6%  (5 points moved from lorries to tuk-tuks;
  *         measured over 180s runs with the warm-up and the bigger bus)
+ *   v1.3: lorry 56.4%, tuk-tuk 34.2%, motorbike  9.5%  (same mix; weights re-calibrated because the
+ *         74px bus and 20s warm-up change which candidates pass the fairness check)
  * tests/spawner.test.ts checks the mix stays near these numbers.
  */
-export const KIND_WEIGHTS = { lorry: 1.33, tuktuk: 0.83, bike: 0.165 } as const;
+export const KIND_WEIGHTS = { lorry: 1.4, tuktuk: 0.87, bike: 0.135 } as const;
 
 /** The mix uses the real clock (not the warm-up-shifted one), so tuk-tuks still arrive from 8s. */
 export function kindWeightsAt(t: number): Record<ObstacleKind, number> {

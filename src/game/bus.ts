@@ -11,9 +11,21 @@ export class Bus {
   private from = 1;
   private progress = 1;
   private duration = LANE_CHANGE_TIME;
+  /** Seconds since the bus last arrived in a lane (for the landing squash). */
+  sinceArrival = Infinity;
 
   get moving(): boolean {
     return this.progress < 1;
+  }
+
+  /** 0 → 1 through the current lane change (1 when settled). For animation only. */
+  get moveProgress(): number {
+    return this.progress;
+  }
+
+  /** −1 moving up, +1 moving down, 0 settled. */
+  get moveDir(): number {
+    return this.moving ? Math.sign(this.target - this.from) : 0;
   }
 
   /** Move one lane up (-1) or down (+1). Works mid-slide too, so quick double taps feel responsive. */
@@ -33,8 +45,12 @@ export class Bus {
   }
 
   update(dt: number): void {
-    if (this.progress >= 1) return;
+    if (this.progress >= 1) {
+      this.sinceArrival += dt;
+      return;
+    }
     this.progress = Math.min(1, this.progress + dt / this.duration);
     this.pos = this.from + (this.target - this.from) * easeOutCubic(this.progress);
+    if (this.progress >= 1) this.sinceArrival = 0;
   }
 }

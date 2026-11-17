@@ -74,9 +74,9 @@ export const SCENE = {
 export const BUS_GLOW = ['#f87800', '#fca044', '#fcc070', '#fca044'] as const;
 
 /** Bus wheels (drawn procedurally so they spin): centres relative to the body, radius in px. */
-export const BUS_WHEELS = { xs: [13, 50], y: 22, r: 4 } as const;
-export const BUS_BODY_H = 22;
-/** Full bus height including wheels (body rows 0–21, wheels down to row 26). */
+export const BUS_WHEELS = { xs: [16, 60], y: 26, r: 5 } as const;
+export const BUS_BODY_H = 26;
+/** Full bus height including wheels (body rows 0–25, wheels down to row 31). */
 export const BUS_H = BUS_WHEELS.y + BUS_WHEELS.r + 1;
 
 /** Palette overrides for the bus. "party" is ready for the future boost form. */
@@ -88,30 +88,34 @@ export const BUS_SKINS: Record<string, Partial<Record<string, string>>> = {
 export type SpriteName = keyof typeof SPRITES;
 
 export const SPRITES = {
-  /** Player bus body, 62×22. Wheels are drawn by the renderer (they spin). 'O' = flickering glow. */
+  /** Player bus body, 74×26. Wheels are drawn by the renderer (they spin). 'O' = flickering glow. */
   bus: [
-    '...KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
-    '.KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKOOOKOKOOOKOOOKK',
-    'KhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKKOKOKOOOKOKOKOKK',
-    'KrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrKKOOOKOKOKOKOOOKK',
-    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKKKKKKKKKKKKKKKKK',
-    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCOCOCOCOCOCOCCK',
-    'KRRwwbbbbRwwbbbbRwwbbbbRwwbbbbRwwbbbbRRRKKKKKKRKKKKKKKKKKKKKKK',
-    'KRRwbbbbbRwbbbbbRwbbbbbRwbbbbbRwbbbbbRRRKwbbbKRKwwwbbbbbbbbbbK',
-    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKwbbbbbbbbbbbbK',
-    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
-    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
-    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
-    'KRRbbbbbbRbbbbbbRbbbbbbRbbbbbbRbbbbbbRRRKbbbbKRKbbbbbbbbbbbbbK',
-    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCRKDDDDKRKKKKKKKKKKKKKKK',
-    'KGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGRKDDDDKCCCCCCCCCCCCCCCK',
-    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBRKGGGGKGGGGGGGGGGGGGGGK',
-    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBRKDDDDKBBBBBBBBBBBBBBBK',
-    'rRRRRRRRKKKKKKKKKKKRRRRRRRRRRRRRRRRRRRRRKDDDDKKKKKKKKKKKRRRRLy',
-    'rrRRRRRRKKKKKKKKKKKRRRRRRRRRRRRRRRRRRRRRKDDDDKKKKKKKKKKKRRRRLL',
-    'KrrrrrrrKKKKKKKKKKKrrrrrrrrrrrrrrrrrrrrrrrrrrKKKKKKKKKKKrrrrrK',
-    'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
-    'gDDDggg.............................................GGGGGGGGGG',
+    '...KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+    '.KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKOOOKOKOOOKOKOOOKK',
+    'KhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhKKOKOKOKOKOKOKOKOKK',
+    'KrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrKKOOOKOKOOOKOKOOOKK',
+    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKKOKOKOKOKOKOKOKOKK',
+    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCKKKKKKKKKKKKKKKKKKK',
+    'KRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRORORORORORORORORK',
+    'KRRwwwbbbbRwwwbbbbRwwwbbbbRwwwbbbbRwwwbbbbRRRKKKKKKKKRRKKKKKKKKKKKKKKKKKKK',
+    'KRRwbbbbbbRwbbbbbbRwbbbbbbRwbbbbbbRwbbbbbbRRRKwwbbbbKRRKwwwwbbbbbbbbbbbbbK',
+    'KRRwbbbbbbRwbbbbbbRwbbbbbbRwbbbbbbRwbbbbbbRRRKbbbbbbKRRKwwbbbbbbbbbbbbbbbK',
+    'KRRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRRRKbbbbbbKRRKbbbbbbbbbbbbbbbbbK',
+    'KRRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRRRKbbbbbbKRRKbbbbbbbbbbbbbbbbbK',
+    'KRRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRRRKbbbbbbKRRKbbbbbbbbbbbbbbbbbK',
+    'KRRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRRRKbbbbbbKRRKbbbbbbbbbbbbbbbbbK',
+    'KRRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRbbbbbbbRRRKbbbbbbKRRKbbbbbbbbbbbbbbbbbK',
+    'KCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCRKDDDDDDKRRKbbbbbbbbbbbbbbbbbK',
+    'KGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGRKDDDDDDKRRKKKKKKKKKKKKKKKKKKK',
+    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBRKDDDDDDKRCCCCCCCCCCCCCCCCCCCK',
+    'KBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBRKGGGGGGKRGGGGGGGGGGGGGGGGGGGK',
+    'KRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRRKDDDDDDKRBBBBBBBBBBBBBBBBBBBK',
+    'rRRRRRRRRRKKKKKKKKKKKKKRRRRRRRRRRRRRRRRRRRRRRKDDDDDDKRKKKKKKKKKKKKKRRRRRLy',
+    'rrRRRRRRRRKKKKKKKKKKKKKRRRRRRRRRRRRRRRRRRRRRRKDDDDDDKRKKKKKKKKKKKKKRRRRRLL',
+    'KrrrrrrrrrKKKKKKKKKKKKKrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrKKKKKKKKKKKKKrrrrrrK',
+    'KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+    'gDDDggggg......................................................GGGGGGGGGGG',
+    '.DDD...........................................................KKKKKKKKKKK',
   ],
   lorry: [
     '..............................................',
@@ -317,4 +321,12 @@ export const FONT_BIG: Font = buildFont({
   ',': ['..', '..', '..', '..', '..', '.#', '#.'],
   ':': ['.', '.', '#', '.', '.', '#', '.'],
   '-': ['....', '....', '....', '####', '....', '....', '....'],
+  '#': ['.#.#.', '.#.#.', '#####', '.#.#.', '#####', '.#.#.', '.#.#.'],
+  $: ['..#..', '.####', '#.#..', '.###.', '..#.#', '####.', '..#..'],
+  '%': ['##...', '##..#', '...#.', '..#..', '.#...', '#..##', '...##'],
+  // Lowercase, for the tuk-tuk's "Buruwa!!!"
+  a: ['.....', '.....', '.###.', '....#', '.####', '#...#', '.####'],
+  r: ['.....', '.....', '#.##.', '##..#', '#....', '#....', '#....'],
+  u: ['.....', '.....', '#...#', '#...#', '#...#', '#..##', '.##.#'],
+  w: ['.....', '.....', '#...#', '#...#', '#.#.#', '#.#.#', '.#.#.'],
 });

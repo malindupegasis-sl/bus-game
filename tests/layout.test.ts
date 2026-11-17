@@ -4,14 +4,17 @@ import { computeLayout, type Box } from '../src/layout';
 
 const overlaps = (a: Box, b: Box) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
-/** The bus's on-screen box in each lane: the whole lane band (laneY−14 … laneY+13), 62px long. */
+/**
+ * Everything the bus can draw in each lane: the whole lane band (33px), 74px long plus room for
+ * squash, exhaust puffs and lane-change dust.
+ */
 function busBoxes(c: Box): Box[] {
   const s = c.w / VIEW_W;
   return [0, 1, 2].map((lane) => ({
-    x: c.x + (BUS_X - 6) * s, // include exhaust puffs behind the bus
-    y: c.y + (laneY(lane) - 14) * s,
-    w: (62 + 6) * s,
-    h: 28 * s,
+    x: c.x + (BUS_X - 8) * s,
+    y: c.y + (laneY(lane) - 16) * s,
+    w: (74 + 12) * s,
+    h: 33 * s,
   }));
 }
 

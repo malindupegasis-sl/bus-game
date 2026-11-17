@@ -17,9 +17,9 @@ const v11 = {
 };
 
 describe('warm-up', () => {
-  it('lasts 30 seconds', () => expect(W).toBe(30));
+  it('lasts 20 seconds', () => expect(W).toBe(20));
 
-  it('holds speed and traffic density at the starting level for the first 30s', () => {
+  it('holds speed and traffic density at the starting level for the first 20s', () => {
     for (let t = 0; t <= W; t += 0.25) {
       expect(speedAt(t)).toBe(DIFFICULTY.startSpeed);
       expect(spawnGapAt(t)).toBe(DIFFICULTY.gapStart);
@@ -32,7 +32,7 @@ describe('warm-up', () => {
     for (let t = 0; t <= W; t += 0.25) expect(musicRateForSpeed(speedAt(t))).toBe(1);
   });
 
-  it('then runs the v1.1 ramp unchanged, 30 seconds later (same curve and caps)', () => {
+  it('then runs the v1.1 ramp unchanged, 20 seconds later (same curve and caps)', () => {
     for (let x = 0; x <= 400; x += 0.37) {
       expect(speedAt(W + x)).toBeCloseTo(v11.speed(x), 9);
       expect(spawnGapAt(W + x)).toBeCloseTo(v11.gap(x), 9);
@@ -85,11 +85,14 @@ describe('traffic mix weights', () => {
     expect(kindWeightsAt(20).tuktuk).toBeGreaterThan(0);
   });
 
-  it('v1.2: weight moved from lorries to tuk-tuks; motorbikes about the same', () => {
+  it('weights favour lorries, then tuk-tuks, with motorbikes rare', () => {
+    // Raw weights are calibrated against the *measured* mix (the fairness check rejects some
+    // candidates), so they move when the bus size changes. The measured mix itself
+    // (~56% / ~34% / ~9.5%) is asserted in spawner.test.ts.
     const w = kindWeightsAt(60);
-    expect(w.lorry).toBeLessThan(1.4); // v1.1 was 1.4
-    expect(w.tuktuk).toBeGreaterThan(0.75); // v1.1 was 0.75
-    expect(w.bike).toBeGreaterThan(0.15);
+    expect(w.lorry).toBeGreaterThan(w.tuktuk);
+    expect(w.tuktuk).toBeGreaterThan(w.bike * 4);
+    expect(w.bike).toBeGreaterThan(0.1);
     expect(w.bike).toBeLessThan(0.2);
   });
 });

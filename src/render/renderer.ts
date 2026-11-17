@@ -6,7 +6,7 @@ import { formatScore } from '../game/score';
 import { KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { UI_RECTS, type Rect } from '../ui-layout';
 import { bubbleRect, bubbleWindow } from '../game/bubble';
-import { BUS_W, busPose } from './busPose';
+import { BUS_W, busColumns, busExtent, busLimits, busPose, busWheels } from './busPose';
 import {
   BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font, type SpriteName,
 } from './sprites';
@@ -20,9 +20,9 @@ const SPECKLES = Array.from({ length: 70 }, (_, i) => ({
 }));
 
 /** Route map polyline (HUD). */
-const ROUTE = [
-  [89, 135], [93, 127], [99, 124], [104, 128], [110, 129], [114, 122], [119, 119], [125, 123], [130, 126], [135, 119],
-] as const;
+const ROUTE = (
+  [[89, 23], [93, 15], [99, 12], [104, 16], [110, 17], [114, 10], [119, 7], [125, 11], [130, 14], [135, 7]] as const
+).map(([x, y]) => [x, HUD_TOP + 4 + y] as const);
 const ROUTE_DISTANCE = 9000; // logical px of travel per lap of the mini map
 
 export class Renderer {
@@ -75,7 +75,7 @@ export class Renderer {
 
   textWidth(s: string, scale = 1, font: Font = FONT_SMALL): number {
     let w = 0;
-    for (const ch of s.toUpperCase()) w += this.glyph(font, ch).w + 1;
+    for (const ch of s) w += this.glyph(font, ch).w + 1;
     return Math.max(0, w - 1) * scale;
   }
 
@@ -83,7 +83,7 @@ export class Renderer {
     s: string, x: number, y: number, color = SCENE.text, scale = 1, align: Align = 'left', shadow = true,
     font: Font = FONT_SMALL,
   ): void {
-    const str = s.toUpperCase();
+    const str = s; // glyph() falls back to uppercase when a font has no lowercase
     const w = this.textWidth(str, scale, font);
     const cx = Math.round(align === 'center' ? x - w / 2 : align === 'right' ? x - w : x);
     if (shadow) this.glyphs(str, cx + scale, y + scale, SCENE.textShadow, scale, font);
@@ -145,25 +145,20 @@ export class Renderer {
   }
 
   private scene(d: number): void {
-    // Sky + distant hills
-    this.rect(0, 0, VIEW_W, 20, SCENE.sky);
-    this.rect(0, 12, VIEW_W, 3, SCENE.skyLow);
+    // Thin roadside strip above the road: sky, distant hills, grass, red-earth shoulder.
+    const T = ROAD_TOP; // 9px
+    this.rect(0, 0, VIEW_W, T, SCENE.sky);
     const hd = d * 0.08;
     for (let x = 0; x < VIEW_W; x++) {
-      const h = Math.round(5 + 3 * Math.sin((x + hd) / 19) + 2 * Math.sin((x + hd) / 7.3));
-      this.rect(x, 20 - h, 1, h, (Math.floor((x + hd) / 2) % 9 === 0) ? SCENE.hillDark : SCENE.hill);
+      const h = Math.round(2 + 1.5 * Math.sin((x + hd) / 19) + Math.sin((x + hd) / 7.3));
+      this.rect(x, T - 3 - h, 1, h, (Math.floor((x + hd) / 2) % 9 === 0) ? SCENE.hillDark : SCENE.hill);
     }
-    // Top verge: grass + red-earth shoulder
-    this.rect(0, 18, VIEW_W, 6, SCENE.grass);
-    this.rect(0, 24, VIEW_W, 4, SCENE.dirt);
-    this.repeat(d * 1.0, 23, (x) => this.rect(x, 25 + (x & 1), 2, 1, SCENE.dirtDark));
-    // Palms (parallax, behind the road)
+    this.rect(0, T - 4, VIEW_W, 2, SCENE.grass);
+    this.rect(0, T - 2, VIEW_W, 2, SCENE.dirt);
+    this.repeat(d * 1.0, 23, (x) => this.rect(x, T - 1, 2, 1, SCENE.dirtDark));
+    // Palm tops peeking over the strip (parallax, behind the road)
     const palm = this.pixelMap(PALM, PALM_PALETTE, 'palm');
-    this.repeat(d * 0.6, 61, (x, i) => {
-      const lift = (i * 7) % 3;
-      this.ctx.drawImage(palm, Math.round(x), 14 - lift);
-      this.rect(Math.round(x) + 2, 25 - lift, 1, lift, SCENE.palmTrunk);
-    });
+    this.repeat(d * 0.6, 61, (x, i) => this.ctx.drawImage(palm, Math.round(x), T - 11 + ((i * 7) % 2)));
 
     // Road
     this.rect(0, ROAD_TOP, VIEW_W, ROAD_BOTTOM - ROAD_TOP, SCENE.asphalt);
@@ -180,16 +175,16 @@ export class Renderer {
       this.repeat(d, 24, (x) => this.rect(x, y, 12, 2, SCENE.line));
     }
 
-    // Bottom verge
-    this.rect(0, ROAD_BOTTOM, VIEW_W, 4, SCENE.dirt);
-    this.repeat(d, 19, (x) => this.rect(x, ROAD_BOTTOM + 1 + (x & 1), 2, 1, SCENE.dirtDark));
-    this.rect(0, ROAD_BOTTOM + 4, VIEW_W, HUD_TOP - ROAD_BOTTOM - 4, SCENE.grass);
+    // Bottom verge: red-earth shoulder, grass and bushes
+    const B = ROAD_BOTTOM;
+    this.rect(0, B, VIEW_W, 3, SCENE.dirt);
+    this.repeat(d, 19, (x) => this.rect(x, B + 1, 2, 1, SCENE.dirtDark));
+    this.rect(0, B + 3, VIEW_W, HUD_TOP - B - 3, SCENE.grass);
     this.repeat(d * 1.15, 37, (x, i) => {
       const bx = Math.round(x);
       const w = 6 + (i % 3) * 2;
-      this.rect(bx, 107, w, 4, SCENE.bushDark);
-      this.rect(bx + 1, 105, w - 2, 4, SCENE.bush);
-      this.rect(bx + 2, 106, 1, 1, SCENE.grass);
+      this.rect(bx, HUD_TOP - 3, w, 3, SCENE.bushDark);
+      this.rect(bx + 1, HUD_TOP - 5, w - 2, 3, SCENE.bush);
     });
   }
 
@@ -208,6 +203,7 @@ export class Renderer {
     type Drawable = { y: number; draw: () => void };
     const list: Drawable[] = [];
 
+    this.drawSkids(w.d);
     for (const o of w.obstacles) {
       const lane = obstacleLane(o, w.d);
       list.push({ y: laneY(lane), draw: () => this.obstacle(o, w.d, lane, now) });
@@ -218,7 +214,7 @@ export class Renderer {
     for (const e of list) e.draw();
 
     // Swearing bubbles go on top of everything on the road.
-    for (const o of w.obstacles) if (o.kind === 'tuktuk') this.bubble(o, w.d, now);
+    for (const o of w.obstacles) if (o.kind === 'tuktuk') this.bubble(o, w.d);
 
     if (game.phase === 'crashed' || game.phase === 'over') {
       const blink = Math.floor(now * 12) % 2 === 0;
@@ -229,58 +225,90 @@ export class Renderer {
     }
   }
 
-  // Exhaust puffs (cosmetic particles in screen space).
-  private puffs: { x: number; y: number; age: number }[] = [];
+  // Cosmetic particles: exhaust puffs and lane-change dust (screen space), skid marks (on the road).
+  private puffs: { x: number; y: number; age: number; dust?: boolean }[] = [];
+  private skids: { x: number; y: number; d0: number; age: number }[] = [];
   private lastPuff = 0;
   private lastNow = 0;
+  private lastTarget = -1;
+  private lastWorld: unknown = null;
+  /** The bus's on-screen box this frame (speech bubbles keep clear of it). */
+  busRect = { x: 0, y: 0, w: 0, h: 0 };
+
+  /** Skid marks are painted on the road, under every vehicle. */
+  private drawSkids(d: number): void {
+    for (const s of this.skids) {
+      this.ctx.globalAlpha = Math.max(0, 0.85 - s.age * 1.1);
+      const x = s.x - (d - s.d0);
+      this.rect(x, s.y, 12, 1, '#2c2c2c');
+      this.rect(x + 3, s.y - 1, 8, 1, '#383838');
+    }
+    this.ctx.globalAlpha = 1;
+  }
 
   private bus(game: Game, busY: number, now: number): void {
     const w = game.world;
     const live = game.phase === 'playing' || game.phase === 'title';
     const dt = Math.min(0.1, Math.max(0, now - this.lastNow));
     this.lastNow = now;
-    const leanDir = w.bus.moving ? Math.sign(w.bus.target - w.bus.pos) : 0;
-    const pose = busPose({ laneY: Math.round(busY), d: w.d, leanDir, live, now });
+    const frozen = game.phase === 'paused';
+    const pose = busPose({
+      laneY: busY, limits: busLimits(laneY, w.bus.pos, w.bus.target), d: w.d, moveDir: w.bus.moveDir, moveProgress: w.bus.moveProgress,
+      sinceArrival: w.bus.sinceArrival, live, now,
+    });
+    const wheels = busWheels(pose, BUS_X);
+    const ext = busExtent(pose, BUS_X);
+    this.busRect = { x: ext.left, y: ext.top, w: ext.right - ext.left + 1, h: ext.bottom - ext.top + 1 };
 
-    // Exhaust: a puff every ~0.12s from the tailpipe, drifting back and up, then fading.
-    const pipeX = BUS_X + 1;
-    const pipeY = pose.bodyTop + 21;
-    if (live && now - this.lastPuff > 0.12) {
-      this.lastPuff = now;
-      this.puffs.push({ x: pipeX, y: pipeY, age: 0 });
+    // A new lane change: skid marks under both wheels and a puff of dust at each.
+    if (this.lastWorld !== w) {
+      this.lastWorld = w;
+      this.lastTarget = w.bus.target;
+      this.skids = [];
     }
-    const drift = 25 + (live ? w.speed * 0.5 : 0);
-    for (const p of this.puffs) {
-      if (game.phase !== 'paused') {
-        p.age += dt;
-        p.x -= drift * dt;
-        p.y -= 6 * dt;
+    if (w.bus.target !== this.lastTarget && game.phase === 'playing') {
+      this.lastTarget = w.bus.target;
+      for (const wh of wheels) {
+        const ground = wh.y + BUS_WHEELS.r;
+        this.skids.push({ x: wh.x - 6, y: ground, d0: w.d, age: 0 });
+        for (let i = 0; i < 3; i++) this.puffs.push({ x: wh.x - 2 + i * 3, y: ground - 1, age: i * 0.04, dust: true });
       }
     }
-    this.puffs = this.puffs.filter((p) => p.age < 0.6 && p.x > -6);
+
+    // Exhaust: a puff every ~0.12s from the tailpipe.
+    if (live && now - this.lastPuff > 0.12) {
+      this.lastPuff = now;
+      this.puffs.push({ x: BUS_X + 1, y: pose.bodyBottom - 1, age: 0 });
+    }
+    const drift = 25 + (live ? w.speed * 0.5 : 0);
+    if (!frozen) {
+      for (const p of this.puffs) {
+        p.age += dt;
+        p.x -= (p.dust ? drift * 1.2 : drift) * dt;
+        p.y -= (p.dust ? 8 : 6) * dt;
+      }
+      for (const s of this.skids) s.age += dt;
+    }
+    this.puffs = this.puffs.filter((p) => p.age < (p.dust ? 0.4 : 0.6) && p.x > -6);
+    this.skids = this.skids.filter((s) => s.age < 0.8 && s.x - (w.d - s.d0) > -14);
     for (const p of this.puffs) {
-      const size = 2 + Math.floor(p.age / 0.15); // 2px → 5px as it drifts and fades
-      this.ctx.globalAlpha = Math.max(0, 0.9 - p.age * 1.3);
-      this.rect(p.x - size / 2, p.y - size / 2, size, size, p.age < 0.15 ? PALETTE.g : PALETTE.G);
+      const size = 2 + Math.floor(p.age / (p.dust ? 0.1 : 0.15));
+      this.ctx.globalAlpha = Math.max(0, 0.9 - p.age * (p.dust ? 2 : 1.3));
+      const col = p.dust ? (p.age < 0.15 ? '#e0c090' : '#c8a070') : p.age < 0.15 ? PALETTE.g : PALETTE.G;
+      this.rect(p.x - size / 2, p.y - size / 2, size, size, col);
     }
     this.ctx.globalAlpha = 1;
 
-    // Body, in runs of columns sharing the same bounce/lean offset.
+    // Body: each sprite column drawn into its tilted / squashed / stretched slot.
     const img = this.pixelMap(
       SPRITES.bus,
       { ...PALETTE, ...BUS_SKINS[this.busSkin], O: BUS_GLOW[pose.glow] },
       `bus:${this.busSkin}:${pose.glow}`,
     );
-    let start = 0;
-    for (let x = 1; x <= BUS_W; x++) {
-      if (x < BUS_W && pose.columnOffset[x] === pose.columnOffset[start]) continue;
-      const wdt = x - start;
-      this.ctx.drawImage(img, start, 0, wdt, img.height, BUS_X + start, pose.bodyTop + pose.columnOffset[start], wdt, img.height);
-      start = x;
-    }
+    for (const c of busColumns(pose, BUS_X)) this.ctx.drawImage(img, c.sx, 0, 1, img.height, c.dx, c.dy, c.dw, c.dh);
 
     // Spinning wheels.
-    for (const wx of BUS_WHEELS.xs) this.wheel(BUS_X + wx, pose.wheelY, pose.wheelFrame);
+    for (const wh of wheels) this.wheel(wh.x, wh.y, pose.wheelFrame);
   }
 
   private wheel(cx: number, cy: number, frame: number): void {
@@ -295,29 +323,42 @@ export class Renderer {
     // Spokes rotate through |, /, -, \ as the bus moves.
     const SPOKES = [[0, -1], [1, -1], [1, 0], [1, 1]];
     const [sx, sy] = SPOKES[frame];
-    for (const k of [-2, -1, 1, 2]) this.rect(cx + sx * k, cy + sy * k, 1, 1, PALETTE.G);
+    for (const k of [-3, -2, -1, 1, 2, 3]) this.rect(cx + sx * k, cy + sy * k, 1, 1, PALETTE.G);
     this.rect(cx, cy, 1, 1, PALETTE.L);
   }
 
-  private bubble(o: Obstacle, d: number, now: number): void {
-    const b = bubbleRect(o, d, (t) => this.textWidth(t));
+  /** CSS px per logical px (set by the layout). The bubble text doubles when the game is small. */
+  pixelScale = 2;
+
+  private bubble(o: Obstacle, d: number): void {
+    const scale = this.pixelScale < 2 ? 2 : 1;
+    const b = bubbleRect(o, d, { textWidth: (t) => this.textWidth(t, 1, FONT_BIG), bus: this.busRect, scale });
     if (!b) return;
     const win = bubbleWindow(o)!;
     const age = (d - win[0]) / (win[1] - win[0]);
-    // Pop: a small box for the first moment, then the full bubble with a little bounce.
-    if (age < 0.08) {
-      this.rect(b.x - 1, b.y + 3, 8, 5, PALETTE.K);
-      this.rect(b.x, b.y + 4, 6, 3, PALETTE.L);
+    // Pop: a small blob for the first moment, then the full bubble.
+    if (age < 0.06) {
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      this.rect(cx - 5, cy - 3, 10, 6, PALETTE.K);
+      this.rect(cx - 4, cy - 2, 8, 4, PALETTE.L);
       return;
     }
-    const y = b.y - (age < 0.18 ? 1 : 0);
-    this.rect(b.x, y, b.w, b.h, PALETTE.K);
-    this.rect(b.x + 1, y + 1, b.w - 2, b.h - 2, PALETTE.L);
-    // Tail on the left edge, pointing back at the tuk-tuk (stays inside the bubble's rows).
-    this.rect(b.x - 2, y + b.h - 4, 2, 2, PALETTE.K);
-    this.rect(b.x - 1, y + b.h - 4, 1, 1, PALETTE.L);
-    const shake = Math.floor(now * 20) % 2;
-    this.text(b.text, b.x + 3 + shake, y + 3, Math.floor(now * 8) % 2 ? PALETTE.R : PALETTE.K, 1, 'left', false);
+    // White bubble, dark outline, tail pointing at the tuk-tuk.
+    this.rect(b.x, b.y, b.w, b.h, PALETTE.K);
+    this.rect(b.x + 1, b.y + 1, b.w - 2, b.h - 2, PALETTE.L);
+    const t = b.tailAt;
+    if (b.tail === 'left') {
+      this.rect(b.x - 3, t - 1, 4, 3, PALETTE.K);
+      this.rect(b.x - 2, t, 3, 1, PALETTE.L);
+    } else if (b.tail === 'down') {
+      this.rect(t - 1, b.y + b.h - 1, 3, 4, PALETTE.K);
+      this.rect(t, b.y + b.h - 1, 1, 3, PALETTE.L);
+    } else {
+      this.rect(t - 1, b.y - 3, 3, 4, PALETTE.K);
+      this.rect(t, b.y - 2, 1, 3, PALETTE.L);
+    }
+    this.text(b.text, b.x + 3, b.y + 3, '#101010', b.scale, 'left', false, FONT_BIG);
   }
 
   private obstacle(o: Obstacle, d: number, lane: number, now: number): void {
@@ -360,18 +401,19 @@ export class Renderer {
     this.rect(0, VIEW_H - 1, VIEW_W, 1, SCENE.hudDark);
     for (const bx of [2, VIEW_W - 4]) {
       this.rect(bx, top + 4, 2, 2, SCENE.hudDark);
-      this.rect(bx, VIEW_H - 6, 2, 2, SCENE.hudDark);
+      this.rect(bx, VIEW_H - 5, 2, 2, SCENE.hudDark);
     }
+    const BH = 23; // box height inside the 28px HUD
 
     // LCD score
-    this.box(6, top + 3, 68, 27, SCENE.lcdBg);
-    this.text('SCORE', 9, top + 5, SCENE.lcdOn, 1, 'left', false);
-    this.text(`HI ${game.highScore}`, 71, top + 5, SCENE.lcdOn, 1, 'right', false);
+    this.box(6, top + 3, 68, BH, SCENE.lcdBg);
+    this.text('SCORE', 9, top + 4, SCENE.lcdOn, 1, 'left', false);
+    this.text(`HI ${game.highScore}`, 71, top + 4, SCENE.lcdOn, 1, 'right', false);
     const score = String(Math.min(999999, w.score)).padStart(6, ' ');
-    this.lcd(score, 10, top + 12);
+    this.lcd(score, 10, top + 10);
 
     // Route map
-    this.box(84, top + 3, 56, 27, SCENE.mapBg);
+    this.box(84, top + 3, 56, BH, SCENE.mapBg);
     for (let i = 1; i < ROUTE.length; i++) this.line(ROUTE[i - 1], ROUTE[i], SCENE.mapRoad, 2);
     this.rect(ROUTE[0][0] - 1, ROUTE[0][1] - 1, 3, 3, PALETTE.L);
     const end = ROUTE[ROUTE.length - 1];
@@ -383,10 +425,10 @@ export class Renderer {
     }
 
     // Speedometer
-    this.box(146, top + 3, 52, 27, SCENE.lcdBg);
+    this.box(146, top + 3, 52, BH, SCENE.lcdBg);
     const kmh = Math.round(w.crashed || game.phase === 'title' ? 0 : w.speed * KMH_PER_SPEED);
     const cx = 171;
-    const cy = top + 26;
+    const cy = top + 24;
     for (let a = 0; a <= 12; a++) {
       const ang = Math.PI + (a / 12) * Math.PI;
       const r = a % 3 === 0 ? 17 : 18;
@@ -399,9 +441,9 @@ export class Renderer {
     this.line([cx, cy], [cx + Math.cos(ang) * 14, cy + Math.sin(ang) * 14], PALETTE.y, 1);
     this.rect(cx - 1, cy - 1, 3, 3, PALETTE.L);
 
-    this.box(202, top + 3, 48, 27, SCENE.lcdBg);
-    this.lcd(String(kmh).padStart(3, ' '), 205, top + 7);
-    this.text('KM/H', 247, top + 23, SCENE.lcdOn, 1, 'right', false);
+    this.box(202, top + 3, 48, BH, SCENE.lcdBg);
+    this.lcd(String(kmh).padStart(3, ' '), 205, top + 5);
+    this.text('KM/H', 247, top + 20, SCENE.lcdOn, 1, 'right', false);
   }
 
   private box(x: number, y: number, w: number, h: number, fill: string): void {
