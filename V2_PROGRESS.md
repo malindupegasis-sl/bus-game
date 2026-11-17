@@ -114,7 +114,11 @@ Reference images are style-only: never copy them or commit them.
 - [x] 3.3 Colombo to Kandy scenery: hills, greenery, bends
 - [x] 3.4 Separate high score per route (existing high score carries over to the 138)
 - [x] 3.5 Rival buses show the selected route's number; gameplay identical across routes
-- [ ] 3.6 Tests, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+- [x] 3.6 Tests, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+  (4233248: 112 unit tests; live in portrait + landscape: route switching, carry-over and separate
+  high scores, reload persistence; garage, overlay and controls re-checked; music never dropped;
+  no page errors)
+- **All v2 stages done. Waiting for the owner to test Stage 3 on the iPhone.**
 
 ### Stage 3 notes
 - ROUTE button on the start screen toggles 138 City / 1 Kandy; remembered on the device (busgame.route).
