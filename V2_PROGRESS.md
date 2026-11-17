@@ -91,7 +91,11 @@ Reference images are style-only: never copy them or commit them.
 - [x] 2.2 Decorations: sign board style, lights, stickers
 - [x] 2.3 Saved on the device (localStorage, try/catch)
 - [x] 2.4 Dham Rajina Xpress look overrides the custom look while boosted
-- [ ] 2.5 Tests, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+- [x] 2.5 Tests, headless check at 390px portrait + landscape, deployed and checked live -> STOP
+  (907ed0a: 106 unit tests; garage flow checked live in portrait, landscape and 16:9 landscape incl.
+  reload persistence and playing in the chosen colour; live run saw lorries, tuk-tuks, motorbikes,
+  rivals, a convoy, pickups and a boost; music never dropped; no page errors)
+- **Waiting for the owner to test Stage 2 on the iPhone before starting Stage 3.**
 
 ### Stage 2 notes
 - Garage options: colour (Classic red, Ocean teal, Emerald, Sunset orange, Midnight, Banana; no
