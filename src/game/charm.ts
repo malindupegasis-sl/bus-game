@@ -2,13 +2,13 @@
  * Lime-and-chilli charm and the Dham Rajina Xpress boost.
  *
  *   0 chillies ─chilli→ 1 ─chilli→ 2 (charm hangs on the bus; a lime can now appear)
- *   2 ─lime→ BOOST (6 s: invincible, road 1.3x, double score) → TRANSITION (1 s, still
+ *   2 ─lime→ BOOST (11 s: invincible, road 1.3x, double score) → TRANSITION (1 s, still
  *   invincible, speed eases back) → 0 (charm comes off, collecting starts again)
  *
  * Lucky charm: while the 2-chilli charm hangs (before the lime), it saves the player from one
  * crash. The charm falls off, the bus blinks for 1.5 s of invincibility, and collecting restarts.
  */
-export const BOOST_TIME = 6;
+export const BOOST_TIME = 11; // v2 feedback: 5 s longer than the first 6 s
 export const TRANSITION_TIME = 1;
 export const SAVE_INVINCIBLE_TIME = 1.5;
 export const BOOST_SPEED = 1.3;

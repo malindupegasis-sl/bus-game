@@ -4,7 +4,9 @@ import { musicAction, STUCK_PLAY_AFTER, STUCK_RELOAD_AFTER, type MusicObservatio
 import { registerTap, TAP_WINDOW, TAPS_TO_TOGGLE } from '../src/debug';
 import { Bus } from '../src/game/bus';
 import { World } from '../src/game/world';
-import { BUS_W, busColumns, busExtent, busGroups, busLimits, busPose, busWheels } from '../src/render/busPose';
+import {
+  BUS_W, FRONT_CHARM, busColumns, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor,
+} from '../src/render/busPose';
 import { BUS_BODY_H, BUS_WHEELS } from '../src/render/sprites';
 
 describe('music watchdog', () => {
@@ -73,7 +75,10 @@ describe('bus drawing optimisations', () => {
       const r = BUS_WHEELS.r;
       const brute = {
         top: Math.min(...cols.map((c) => c.dy)),
-        bottom: Math.max(...cols.map((c) => c.dy + c.dh - 1), ...wheels.map((w) => w.y + r)),
+        bottom: Math.max(
+          ...cols.map((c) => c.dy + c.dh - 1), ...wheels.map((w) => w.y + r),
+          frontCharmAnchor(p, BUS_X).y + FRONT_CHARM.h - 1, // room reserved for the front charm
+        ),
         left: Math.min(...cols.map((c) => c.dx), ...wheels.map((w) => w.x - r)),
         right: Math.max(...cols.map((c) => c.dx + c.dw - 1), ...wheels.map((w) => w.x + r)),
       };

@@ -16,7 +16,19 @@ export interface Pickup {
   collected: boolean;
 }
 
-export const PICKUP_W = 10;
+/** Pickups are 2.5x their first size: chilli 25×30, lime 25×25 (both fit inside a 33px lane). */
+export const PICKUP_W = 25;
+export const PICKUP_H = { chilli: 30, lime: 25 } as const;
+
+/**
+ * Where a pickup is drawn: bottom row 2px above the lane's bottom edge, bobbing 1px down, with a
+ * shadow on the road; everything stays inside the lane band (laneY − 16 … laneY + 16).
+ */
+export function pickupDrawBox(kind: PickupKind, laneCenterY: number, bob: 0 | 1) {
+  const h = PICKUP_H[kind];
+  const bottom = Math.round(laneCenterY) + 13 + bob;
+  return { y: bottom - h + 1, h, bottom, shadowY: Math.round(laneCenterY) + 15 };
+}
 /** Seconds between pickups (randomised in this range), and the first one of a run. */
 export const CHILLI_EVERY: [number, number] = [6, 10];
 export const LIME_AFTER: [number, number] = [2.5, 4];

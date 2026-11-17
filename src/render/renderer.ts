@@ -7,11 +7,11 @@ import { formatScore } from '../game/score';
 import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
-import { PICKUP_W, pickupX } from '../game/pickups';
+import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
 import { UI_RECTS, type Rect } from '../ui-layout';
 import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, type BubbleRect, type Box } from '../game/bubble';
-import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels } from './busPose';
+import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
   BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font,
   type SpriteName,
@@ -21,6 +21,10 @@ type Align = 'left' | 'center' | 'right';
 
 /** Colour-cycling LED strip colours for the Dham Rajina Xpress. */
 const LED_COLORS = ['#ff2a6d', '#ffd400', '#28ff8c', '#2ad4ff', '#a64dff', '#ff7ae6'];
+/** Collect feedback timings (s): body glint, sparkle burst, popups. All under a second. */
+const GLINT_TIME = 0.4;
+const BURST_TIME = 0.45;
+const POPUP_TIME = 0.9;
 /** How long the conductor hangs out shouting after the boost starts (s). */
 const CONDUCTOR_TIME = 2;
 /** Deterministic flicker noise in [0, 1) that changes 15 times a second. */
@@ -510,13 +514,43 @@ export class Renderer {
       this.ctx.drawImage(this.wheelImage(pose.wheelFrame), wh.x - BUS_WHEELS.r, wh.y - BUS_WHEELS.r);
     }
 
-    // The lime-and-chilli charm hangs at the back of the bus, swinging a little.
-    if (c.chillies === 2) {
-      const charm = this.sprite(c.boostT > 0 ? 'charmFull' : 'charm2');
-      const swing = Math.round(Math.sin(now * 5));
-      this.ctx.drawImage(charm, BUS_X + 1 + swing, ext.top + 5);
+    // The lime-and-chilli charm hangs under the front bumper and grows as you collect:
+    // 1 chilli, 2 chillies, then the full charm with the lime during the boost. The string stays
+    // tied to the bumper; the charm sways (more while changing lanes). Cosmetic: not in the hitbox.
+    if (c.chillies > 0) {
+      const name = c.boostT > 0 ? 'frontCharmFull' : c.chillies === 2 ? 'frontCharm2' : 'frontCharm1';
+      const img = this.sprite(name);
+      const a = frontCharmAnchor(pose, BUS_X);
+      const moving = w.bus.moving;
+      const sway = Math.round(Math.sin(now * (moving ? 14 : 5)) * (moving ? 1.6 : 0.8));
+      const x0 = a.x - Math.floor(img.width / 2);
+      this.ctx.drawImage(img, 0, 0, img.width, 2, x0, a.y, img.width, 2);
+      this.ctx.drawImage(img, 0, 2, img.width, img.height - 2, x0 + sway, a.y + 2, img.width, img.height - 2);
+      this.charmAt = { x: a.x, y: a.y };
     }
     this.ctx.globalAlpha = 1;
+
+    // Collect feedback: a quick white flash, then a gold glint sweeping across the body.
+    const gt = now - this.glintAt;
+    if (gt >= 0 && gt < GLINT_TIME) {
+      const groups = busGroups(pose, BUS_X);
+      if (gt < 0.12) {
+        this.ctx.globalAlpha = 0.6 * (1 - gt / 0.12);
+        const white = this.busSilhouette('#ffffff');
+        for (const gr of groups) this.ctx.drawImage(white, gr.sx, 0, gr.sw, white.height, gr.dx, gr.dy, gr.dw, gr.dh);
+      }
+      const gold = this.busSilhouette('#ffe060');
+      const s0 = -10 + (gt / GLINT_TIME) * (BUS_W + 20);
+      this.ctx.globalAlpha = 0.8;
+      for (const gr of groups) {
+        const a = Math.max(gr.sx, Math.floor(s0));
+        const b = Math.min(gr.sx + gr.sw, Math.floor(s0) + 8);
+        if (b <= a) continue;
+        const k = gr.dw / gr.sw;
+        this.ctx.drawImage(gold, a, 0, b - a, gold.height, Math.round(gr.dx + (a - gr.sx) * k), gr.dy, Math.max(1, Math.round((b - a) * k)), gr.dh);
+      }
+      this.ctx.globalAlpha = 1;
+    }
 
     // Conductor hangs out of the door and shouts when the boost starts.
     this.conductorBubble = null;
@@ -554,6 +588,21 @@ export class Renderer {
   }
 
   private sparkles: { x: number; y: number; age: number; col: string }[] = [];
+  /** Time of the last pickup (for the body glint), and where the front charm hangs. */
+  private glintAt = -9;
+  private charmAt = { x: BUS_X + 68, y: 0 };
+  private bursts: { x: number; y: number; vx: number; vy: number; age: number; col: string }[] = [];
+
+  /** The bus body as a single-colour silhouette (for the collect flash and glint). */
+  private busSilhouette(color: string): HTMLCanvasElement {
+    return this.layer(`busSil:${color}`, SPRITES.bus[0].length, SPRITES.bus.length, (g) => {
+      g.drawImage(this.busImage('classic', 1), 0, 0);
+      g.globalCompositeOperation = 'source-in';
+      g.fillStyle = color;
+      g.fillRect(0, 0, SPRITES.bus[0].length, SPRITES.bus.length);
+      g.globalCompositeOperation = 'source-over';
+    });
+  }
   private conductorBubble: Box | null = null;
 
   private wheelImage(frame: number): HTMLCanvasElement {
@@ -703,11 +752,11 @@ export class Renderer {
       const x = Math.round(pickupX(p, d));
       if (x > VIEW_W || x + PICKUP_W < 0) continue;
       const img = this.sprite(p.kind);
-      const cy = Math.round(laneY(p.lane));
-      this.rect(x + 1, cy + 9, PICKUP_W - 2, 1, 'rgba(0,0,0,0.35)');
-      const y = cy - 4 - Math.round(1.5 + 1.5 * Math.sin(now * 6 + p.id));
-      this.ctx.drawImage(img, x, y);
-      if (Math.floor(now * 3 + p.id) % 3 === 0) this.rect(x + 7, y + 1, 1, 1, '#ffffff');
+      const bob = (Math.sin(now * 6 + p.id) > 0 ? 1 : 0) as 0 | 1;
+      const box = pickupDrawBox(p.kind, laneY(p.lane), bob);
+      this.rect(x + 3, box.shadowY, PICKUP_W - 6, 1, 'rgba(0,0,0,0.35)');
+      this.ctx.drawImage(img, x, box.y);
+      if (Math.floor(now * 3 + p.id) % 3 === 0) this.rect(x + 8, box.y + 6, 2, 2, '#ffffff');
     }
   }
 
@@ -731,10 +780,23 @@ export class Renderer {
   /** World events that need a visual: captions, popups, the falling charm, the conductor's shout. */
   onEvent(e: WorldEvent): void {
     if (e.type === 'seen') this.captionQueue.push(e.what);
+    else if (e.type === 'pickup') {
+      this.glintAt = this.lastNow;
+      this.popups.push({ text: e.kind === 'chilli' ? '+CHILLI!' : '+LIME!', color: e.kind === 'chilli' ? '#7cfc7c' : '#e0f870', age: 0 });
+      // Sparkle burst off the pickup.
+      const cx = e.x + PICKUP_W / 2;
+      const cy = laneY(e.lane) - 2;
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2 + Math.random() * 0.4;
+        const sp = 45 + Math.random() * 35;
+        const col = ['#ffe060', '#ffffff', e.kind === 'chilli' ? '#58e858' : '#e0f870'][i % 3];
+        this.bursts.push({ x: cx, y: cy, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, age: 0, col });
+      }
+    }
     else if (e.type === 'overtake') this.popups.push({ text: `+${e.bonus} OVERTAKE!`, color: PALETTE.y, age: 0 });
     else if (e.type === 'charm' && e.what === 'saved') {
       this.popups.push({ text: 'LUCKY CHARM!', color: '#7cfc7c', age: 0 });
-      this.fallingCharm = { x: BUS_X + 1, y: this.busRect.y + 5, vy: -40, age: 0 };
+      this.fallingCharm = { x: this.charmAt.x - 3, y: this.charmAt.y, vy: -40, age: 0 };
     } else if (e.type === 'charm' && e.what === 'boostStart') {
       this.conductorText = pick(CONDUCTOR_SHOUTS, this.shoutN++);
       this.popups.push({ text: 'DHAM RAJINA XPRESS!', color: '#ff7af0', age: 0 });
@@ -757,20 +819,41 @@ export class Renderer {
       f.y += f.vy * dt;
       f.x -= (25 + game.world.speed * 0.6) * dt;
       if (f.age > 0.9) this.fallingCharm = null;
-      else this.ctx.drawImage(this.sprite('charm2'), Math.round(f.x), Math.round(f.y));
+      else this.ctx.drawImage(this.sprite('frontCharm2'), Math.round(f.x), Math.round(f.y));
     }
 
-    // Popups float up from in front of the bus (never over it).
+    // Sparkle bursts from collected pickups (gone in under half a second).
+    if (this.bursts.length) {
+      let k = 0;
+      for (const b of this.bursts) {
+        b.age += dt;
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        if (b.age < BURST_TIME) this.bursts[k++] = b;
+      }
+      this.bursts.length = k;
+      for (const b of this.bursts) {
+        const sz = b.age < 0.2 ? 2 : 1;
+        this.rect(b.x, b.y, sz, sz, b.col);
+      }
+    }
+
+    // Popups: just above the bus (or just below it in the top lane), never on the road ahead.
+    // Each lasts under a second.
     let n = 0;
     for (const p of this.popups) {
       p.age += dt;
-      if (p.age < 1.1) this.popups[n++] = p;
+      if (p.age < POPUP_TIME) this.popups[n++] = p;
     }
     this.popups.length = n;
+    const r = this.busRect;
     this.popups.forEach((p, i) => {
-      const x = Math.min(VIEW_W - 4 - this.textWidth(p.text), this.busRect.x + this.busRect.w + 4);
-      const y = Math.max(10, this.busRect.y + 6 + i * 7 - Math.round(p.age * 10));
-      if (p.age > 0.8) this.ctx.globalAlpha = Math.max(0, (1.1 - p.age) / 0.3);
+      const tw = this.textWidth(p.text);
+      const x = Math.max(1, Math.min(VIEW_W - 1 - tw, Math.round(r.x + r.w / 2 - tw / 2)));
+      const rise = Math.round(p.age * 8);
+      const above = r.y - 8 - i * 7 - rise;
+      const y = above >= ROAD_TOP ? above : r.y + r.h + 2 + i * 7 + rise;
+      if (p.age > POPUP_TIME - 0.25) this.ctx.globalAlpha = Math.max(0, (POPUP_TIME - p.age) / 0.25);
       this.text(p.text, x, y, p.color, 1, 'left', true);
       this.ctx.globalAlpha = 1;
     });

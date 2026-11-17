@@ -7,7 +7,7 @@ import {
 } from './charm';
 import { speedAt } from './difficulty';
 import { BUS_HIT, KINDS, exitDistance, obstacleLane, obstacleX, type Obstacle } from './obstacles';
-import { createPickupSpawner, pickupGone, touches, updatePickups, type Pickup, type PickupSpawner } from './pickups';
+import { createPickupSpawner, pickupGone, pickupX, touches, updatePickups, type Pickup, type PickupSpawner } from './pickups';
 import { createRng, type Rng } from './rng';
 import { createSpawner, updateSpawner, type SpawnerState } from './spawner';
 
@@ -16,7 +16,8 @@ export type WorldEvent =
   | { type: 'crash'; obstacle: Obstacle }
   | { type: 'charm'; what: CharmEvent }
   | { type: 'overtake'; bonus: number; obstacle: Obstacle }
-  | { type: 'seen'; what: CaptionKey };
+  | { type: 'seen'; what: CaptionKey }
+  | { type: 'pickup'; kind: 'chilli' | 'lime'; lane: number; x: number };
 
 export interface WorldOptions {
   /** Chillies, limes, the charm and the boost. Off in the strict traffic-fairness tests. */
@@ -117,6 +118,7 @@ export class World {
       for (const pk of this.pickups) {
         if (!touches(pk, this.d, this.bus.pos)) continue;
         pk.collected = true;
+        this.events.push({ type: 'pickup', kind: pk.kind, lane: pk.lane, x: pickupX(pk, this.d) });
         for (const what of collect(this.charm, pk.kind)) this.events.push({ type: 'charm', what });
       }
       this.pickups = this.pickups.filter((pk) => !pickupGone(pk, this.d));

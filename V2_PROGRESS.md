@@ -71,7 +71,14 @@ Reference images are style-only: never copy them or commit them.
 - Live check (10fab55): 81 unit tests; portrait + landscape at 390px; a 45 s live run saw lorries,
   tuk-tuks, motorbikes, rival buses and a convoy, plus pickups; music never dropped; no page errors.
   Boost + chipmunk music verified in the dev build from a real lime pickup.
-- **Waiting for the owner to test Stage 1 on the iPhone before starting Stage 2.**
+- Owner tested Stage 1 on iPhone and asked for these fixes before Stage 2:
+
+### Stage 1 feedback fixes
+- [x] 1.16 Boost lasts 11 s (was 6); ~1 s transition back kept; chipmunk music for the full boost
+- [x] 1.17 Chilli and lime pickups 2.5x bigger (25x30, 25x25), inside the lane; fairness rule kept; HUD icon unchanged
+- [x] 1.18 Pickup feedback: white flash + gold glint across the bus, sparkle burst off the pickup, "+CHILLI!"/"+LIME!" popup; all under 1 s; popups sit above (or below) the bus, never on the road ahead
+- [x] 1.19 Charm moved under the front bumper, in proportion to the bus; grows 1 chilli -> 2 chillies -> full with lime (boost); sways (more on lane changes); not part of the hitbox
+- [ ] 1.20 Deployed and checked live -> STOP for the owner to test before Stage 2
 
 ## Stage 2: bus customisation
 - [ ] 2.1 Garage screen from the start menu: bus colours

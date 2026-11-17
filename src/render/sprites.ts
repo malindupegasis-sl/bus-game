@@ -36,6 +36,10 @@ export const PALETTE: Record<string, string> = {
   d: '#e09858', // dog fur
   U: '#1c2840', // tinted SUV glass
   W: '#801030', // maroon shawl
+  E: '#58e858', // chilli highlight
+  I: '#b8e030', // lime
+  i: '#78a818', // lime shade
+  J: '#e0f870', // lime highlight
 };
 
 /** Scene colours (road, roadside, HUD). */
@@ -249,34 +253,6 @@ export const SPRITES = {
     '..WWWLGGLWWW..',
     '..WWWLLLLWWW..',
   ],
-  /** Green chilli pickup, 10×12. */
-  chilli: [
-    '......nnn.',
-    '......nn..',
-    '....KNNy..',
-    '.....NNNK.',
-    '...KNNy...',
-    '....NNNK..',
-    '....NNN...',
-    '..KNNy....',
-    '...NNNK...',
-    '...NNN....',
-    '.KNNK.....',
-    'KNK.......',
-  ],
-  /** Lime pickup, 10×10. */
-  lime: [
-    '....nn....',
-    '..KKVVKK..',
-    '.KVLLVVVK.',
-    '.KVLLVVVK.',
-    '.VVVVVVVV.',
-    '.VVVVVVVV.',
-    '.KVVVVTVK.',
-    '.KVVTVVVK.',
-    '..KKVVKK..',
-    '..........',
-  ],
   /** Lime-and-chilli charm hanging on the bus (2 chillies). */
   charm2: [
     '...G...',
@@ -337,6 +313,97 @@ export const SPRITES = {
     '...DDDDD....',
     '...KK.KK....',
     '...KK.KK....',
+  ],
+  /** Green chilli pickup, 25×30 (2.5x the v2 size, fits inside a 33px lane). */
+  chilli: [
+    '..............KNNNttK....',
+    '.............KNNNtNNEK...',
+    '............KnNNNtNEEEK..',
+    '............KNNNtttEEEK..',
+    '...........KnNNtNNEtEEK..',
+    '...........KNNNNNEEEEEK..',
+    '..........KnNNNNNEEEEEK..',
+    '..........KnNNNNEEEEEK...',
+    '.........KnNNNNNEEEENK...',
+    '.........KnNNNNEEEEEK....',
+    '.........KNNNNNEEEEK.....',
+    '........KnNNNNEEEEK......',
+    '........KNNNNEEEENK......',
+    '.......KnNNNNEEEEK.......',
+    '.......KnNNNNEEEK........',
+    '.......KNNNNEEEK.........',
+    '......KnNNNNEEEK.........',
+    '......KnNNNEEEK..........',
+    '......KnNNNEEK...........',
+    '......KNNNNEEK...........',
+    '.....KnNNNEEK............',
+    '.....KnNNNEEK............',
+    '.....KnNNEEK.............',
+    '.....KNNEEK..............',
+    '.....KNNEEK..............',
+    '.....KNNEK...............',
+    '.....KNNK................',
+    '.....KNNK................',
+    '......KK.................',
+    '.........................',
+  ],
+  /** Lime pickup, 25×25 (2.5x the v2 size). */
+  lime: [
+    '............KNKK.........',
+    '...........KNKNNK........',
+    '.........KKKNKNNNK.......',
+    '.......KKJJJJJIIKK.......',
+    '......KJJJJJJIIIIIK......',
+    '.....KJJJJJJIIIIIIIK.....',
+    '....KJJJJJJIIIIIIIIIK....',
+    '...KJJJJLLIIIIIIIIIIIK...',
+    '..KJJJJLLIIIIIIIIIIIIIK..',
+    '..KJJJJLIIIIIIIIIIIIIIK..',
+    '.KJJJJJIIIIIIIIIIIIIIiiK.',
+    '.KJJJJIIIIIIIIIIIIIIiiiK.',
+    '.KJJJIIIIIIIIIIIIiIiiiiK.',
+    '.KJJIIIIIIIIIIIIIIiiiiiK.',
+    '.KJIIIIIIIIIIIIIIiiiiiiK.',
+    '.KIIIIIIIIIIIIIIiiiiiiiK.',
+    '.KIIIIIIIIIIIIIiiiiiiiiK.',
+    '..KIIIIIIIIIIIiiiiiiiiK..',
+    '..KIIIIIIIiIIiiiiiiiiiK..',
+    '...KIIIIIIIIiiiiiiiiiK...',
+    '....KIIIIIIiiiiiiiiiK....',
+    '.....KIIIIiiiiiiiiiK.....',
+    '......KIIiiiiiiiiiK......',
+    '.......KKiiiiiiiKK.......',
+    '.........KKKKKKK.........',
+  ],
+  /** Charm under the front bumper: 1 chilli. */
+  frontCharm1: [
+    '...G...',
+    '...G...',
+    '...tt..',
+    '...EN..',
+    '...EN..',
+    '...EN..',
+    '....n..',
+  ],
+  /** Charm under the front bumper: 2 chillies. */
+  frontCharm2: [
+    '...G...',
+    '..G.G..',
+    '.tt.tt.',
+    '.EN.EN.',
+    '.EN.EN.',
+    '.EN.EN.',
+    '..n..n.',
+  ],
+  /** Charm under the front bumper: complete, with the lime (boost). */
+  frontCharmFull: [
+    '...G...',
+    '..JII..',
+    'ttIIItt',
+    'ENIIiEN',
+    'EN...EN',
+    'EN...EN',
+    '.n....n',
   ],
 } satisfies Record<string, string[]>;
 

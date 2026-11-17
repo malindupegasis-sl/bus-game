@@ -124,6 +124,21 @@ export function busWheels(p: BusPose, busX: number): { x: number; y: number }[] 
   return BUS_WHEELS.xs.map((wx) => ({ x: Math.round(left(p, busX, wx + 0.5) - 0.5), y: p.wheelY + tiltAt(p, wx) }));
 }
 
+/** The lime-and-chilli charm hangs under the front bumper at this body column; it's 7×7. */
+export const FRONT_CHARM_COL = 68;
+export const FRONT_CHARM = { w: 7, h: 7 } as const;
+
+/**
+ * Where the front charm's string attaches (top-centre of the 7×7 sprite): just under the front
+ * bumper, following the body's tilt and bounce. Cosmetic only: not part of the hitbox.
+ */
+export function frontCharmAnchor(p: BusPose, busX: number): { x: number; y: number } {
+  return {
+    x: Math.round(left(p, busX, FRONT_CHARM_COL + 0.5) - 0.5),
+    y: p.bodyBottom + p.bounce + tiltAt(p, FRONT_CHARM_COL) + 1,
+  };
+}
+
 /**
  * Bounding box of everything the bus draws in this pose. Computed directly (no allocation): the
  * tilt is linear from the rear (0) to the nose (tilt), so its extremes are at the two ends.
@@ -140,9 +155,11 @@ export function busExtent(p: BusPose, busX: number): { top: number; bottom: numb
     wheelLeft = Math.min(wheelLeft, cx - r);
     wheelRight = Math.max(wheelRight, cx + r);
   }
+  // Room is always reserved for the front charm (with 2px of sway), so it never leaves the lane.
+  const charm = frontCharmAnchor(p, busX);
   return {
     top: p.bodyBottom - dh + 1 + p.bounce + Math.min(0, p.tilt),
-    bottom: Math.max(p.bodyBottom + p.bounce + Math.max(0, p.tilt), wheelBottom),
+    bottom: Math.max(p.bodyBottom + p.bounce + Math.max(0, p.tilt), wheelBottom, charm.y + FRONT_CHARM.h - 1),
     left: Math.min(Math.round(left(p, busX, 0)), wheelLeft),
     right: Math.max(Math.round(left(p, busX, BUS_W)) - 1, wheelRight),
   };
