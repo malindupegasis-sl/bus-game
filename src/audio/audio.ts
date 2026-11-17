@@ -13,6 +13,8 @@ const WATCH_EVERY = 250;
  */
 const RATE_STEP = 0.04;
 const RATE_MIN_INTERVAL = 4000; // ms
+/** Chipmunk mode during the Dham Rajina Xpress boost: faster and higher (pitch NOT preserved). */
+export const CHIPMUNK_RATE = 1.35;
 
 function loadMuted(): boolean {
   try {
@@ -50,6 +52,25 @@ export class AudioManager {
   private wantMusic = false;
   private playing = false;
   private rate = 1;
+  private chipmunk = false;
+
+  /** The rate the music actually plays at right now. */
+  private get effRate(): number {
+    return this.chipmunk ? CHIPMUNK_RATE : this.rate;
+  }
+
+  /** Boost on/off: chipmunk mode (1.35x, pitch goes up), then back to normal. */
+  setBoost(on: boolean): void {
+    if (this.chipmunk === on) return;
+    this.chipmunk = on;
+    const el = this.song;
+    if (el) {
+      el.preservesPitch = !on;
+      (el as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = !on;
+      el.playbackRate = this.effRate;
+    }
+    this.note(on ? 'chipmunk mode on' : 'chipmunk mode off');
+  }
   private step = 0;
   private nextStepTime = 0;
   private timer: number | null = null;
@@ -123,6 +144,11 @@ export class AudioManager {
     this.stopMusic();
     this.wantMusic = true;
     this.rate = 1;
+    this.chipmunk = false;
+    if (this.song) {
+      this.song.preservesPitch = true;
+      (this.song as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = true;
+    }
     this.lastRateChange = -Infinity;
     if (this.ctx) this.beginMusic();
   }
@@ -133,7 +159,7 @@ export class AudioManager {
     this.heldByGame = false;
     if (this.song) {
       this.usingSong = true;
-      this.song.playbackRate = this.rate;
+      this.song.playbackRate = this.effRate;
       this.song.currentTime = SONG_LOOP.start;
       this.playSong();
     } else {
@@ -216,7 +242,7 @@ export class AudioManager {
   private playSong(): void {
     const el = this.song;
     if (!el) return;
-    if (el.playbackRate !== this.rate) el.playbackRate = this.rate;
+    if (el.playbackRate !== this.effRate) el.playbackRate = this.effRate;
     el.play().then(() => (this.pendingResume = false)).catch((e) => this.onPlayError(e));
   }
 
@@ -255,12 +281,12 @@ export class AudioManager {
     const active = this.playing && !this.heldByGame && document.visibilityState === 'visible';
     if (el && this.usingSong && active && !el.paused) {
       // One frame of look-ahead so the jump lands before the music's tail.
-      if (el.currentTime >= this.loopEnd(el) - 0.02 * this.rate) el.currentTime = SONG_LOOP.start;
+      if (el.currentTime >= this.loopEnd(el) - 0.02 * this.effRate) el.currentTime = SONG_LOOP.start;
     }
     if (nowMs - this.lastWatch < WATCH_EVERY) return;
     const dt = (nowMs - this.lastWatch) / 1000;
     this.lastWatch = nowMs;
-    if (el && el.playbackRate !== this.rate) el.playbackRate = this.rate;
+    if (el && el.playbackRate !== this.effRate) el.playbackRate = this.effRate;
 
     const songTime = el ? el.currentTime : 0;
     const progressing = !!el && !el.paused && Math.abs(songTime - this.lastSongTime) > 0.01;
@@ -294,6 +320,11 @@ export class AudioManager {
     }
   }
 
+  /** Chiptune fallback pitch: up with the chipmunk boost. */
+  private get pitch(): number {
+    return this.chipmunk ? CHIPMUNK_RATE : 1;
+  }
+
   /** For tests and the debug overlay. */
   get songState(): { time: number; playing: boolean; rate: number; pitchKept: boolean } | null {
     const el = this.song;
@@ -322,7 +353,7 @@ export class AudioManager {
     const ctx = this.ctx;
     if (!ctx) return;
     while (this.nextStepTime < ctx.currentTime + 0.12) {
-      const stepDur = 60 / BPM / 4 / this.rate;
+      const stepDur = 60 / BPM / 4 / this.effRate;
       this.playStep(this.step, this.nextStepTime, stepDur);
       this.nextStepTime += stepDur;
       this.step = (this.step + 1) % LEAD.length;
@@ -332,11 +363,11 @@ export class AudioManager {
   private playStep(i: number, t: number, stepDur: number): void {
     const lead = LEAD[i];
     if (lead !== '-' && lead !== '.') {
-      this.tone(midiToFreq(noteToMidi(lead)), t, noteLength(LEAD, i) * stepDur * 0.9, 0.16, 'pulse');
+      this.tone(midiToFreq(noteToMidi(lead)) * this.pitch, t, noteLength(LEAD, i) * stepDur * 0.9, 0.16, 'pulse');
     }
     const bass = BASS[i];
     if (bass !== '-' && bass !== '.') {
-      this.tone(midiToFreq(noteToMidi(bass)), t, noteLength(BASS, i) * stepDur * 0.8, 0.3, 'triangle');
+      this.tone(midiToFreq(noteToMidi(bass)) * this.pitch, t, noteLength(BASS, i) * stepDur * 0.8, 0.3, 'triangle');
     }
     const dr = DRUMS[i];
     if (dr === 'k') this.kick(t);

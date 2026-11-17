@@ -1,7 +1,7 @@
 import './style.css';
 import { AudioManager } from './audio/audio';
 import { HUD_TOP, VIEW_H, VIEW_W } from './config';
-import { musicRateForSpeed } from './game/difficulty';
+import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
 import { Renderer } from './render/renderer';
@@ -85,6 +85,7 @@ const debug = new DebugOverlay(() => {
     `AUDIO CTX ${audio.contextState}  recoveries ${audio.restarts}`,
     `LAST ${audio.lastEvent}`,
     `RUN ${game.phase} t=${game.world.t.toFixed(1)}s  vehicles ${game.world.obstacles.length}  particles ${renderer.particleCount}`,
+    `CHARM chillies ${game.world.charm.chillies}${game.world.charm.boostT > 0 ? '  BOOST' : ''}${game.world.invincible ? '  invincible' : ''}  bonus ${game.world.bonus}`,
   ];
 });
 
@@ -92,6 +93,9 @@ const debug = new DebugOverlay(() => {
 
 function flushEvents(): void {
   for (const e of game.world.drainEvents()) {
+    renderer.onEvent(e);
+    if (e.type === 'charm' && e.what === 'boostStart') audio.setBoost(true);
+    else if (e.type === 'charm' && e.what === 'boostEnd') audio.setBoost(false);
     if (e.type === 'lane') audio.sfxLane();
     else if (e.type === 'crash') {
       audio.stopMusic();
@@ -203,7 +207,8 @@ function frame(now: number): void {
   }
   if (steps === MAX_STEPS) acc = 0;
   flushEvents();
-  if (game.phase === 'playing') audio.setRate(musicRateForSpeed(game.world.speed));
+  // Music follows the base difficulty speed, not the boost's extra 1.3x (chipmunk mode handles that).
+  if (game.phase === 'playing') audio.setRate(musicRateForSpeed(speedAt(game.world.t)));
   if (game.phase !== lastPhase || game.phase === 'over') {
     lastPhase = game.phase;
     syncUi();
@@ -234,6 +239,13 @@ const hook: Record<string, unknown> = {
     song: audio.songState,
     muted: audio.muted,
     debug: debug.on,
+    chillies: game.world.charm.chillies,
+    boosting: game.world.charm.boostT > 0,
+    invincible: game.world.invincible,
+    bonus: game.world.bonus,
+    saves: game.world.saves,
+    pickups: game.world.pickups.length,
+    kinds: game.world.obstacles.map((o) => o.kind),
     fps: debug.fps,
     audioCtx: audio.contextState,
     recoveries: audio.restarts,

@@ -34,6 +34,8 @@ export const PALETTE: Record<string, string> = {
   H: '#6888fc', // helmet blue
   Q: '#f878f8', // pink
   d: '#e09858', // dog fur
+  U: '#1c2840', // tinted SUV glass
+  W: '#801030', // maroon shawl
 };
 
 /** Scene colours (road, roadside, HUD). */
@@ -82,6 +84,10 @@ export const BUS_H = BUS_WHEELS.y + BUS_WHEELS.r + 1;
 /** Palette overrides for the bus. "party" is ready for the future boost form. */
 export const BUS_SKINS: Record<string, Partial<Record<string, string>>> = {
   classic: {},
+  /** Rival same-route buses: blue and yellow livery. */
+  rival: { R: '#1858c8', r: '#0c2c78', h: '#58a0f8', B: '#f8d800', G: '#bcbcbc', C: '#fce0a8' },
+  /** Dham Rajina Xpress (boost): own design, purple / pink / magenta with chrome. */
+  xpress: { R: '#e8209c', r: '#7a1aa8', h: '#ff8ad8', B: '#b02cf0', G: '#f4f4ff', C: '#ffe0fa', g: '#d8d8e8', D: '#3a1050' },
   party: { R: '#f83898', r: '#a8005c', h: '#fc8cd0', B: '#d800cc', G: '#e8e8e8', C: '#fcfcfc', Y: '#fcfc00' },
 };
 
@@ -203,6 +209,134 @@ export const SPRITES = {
     '...YYLLLYY...',
     '..Y..YLY..Y..',
     '......Y......',
+  ],
+  /** Black convoy SUV, 32×18, facing left. Flashing roof lights are drawn by the renderer. */
+  suv: [
+    '................................',
+    '................................',
+    '.....KKKKKKKKKKKKKKKKKKKKKKKKK..',
+    '...KKgggggggggggggggggggggggggKK',
+    '...KDDDDDDDDDKDDDDDDDKDDDDDDDDDK',
+    '...KDDggUUUUUKggUUUUUKggUUUUUDDK',
+    '...KDDUUUUUUUKUUUUUUUKUUUUUUUDDK',
+    '...KDDUUUUUUUKUUUUUUUKUUUUUUUDDK',
+    'KKKKDDUUUUUUUKUUUUUUUKUUUUUUUDDK',
+    'KDDDDDDDDDDDDKDDDDDDDKDDDDDDDDDK',
+    'KLLDDDDDDyyyDKDDDDDDDKDDDDDDDDRR',
+    'KDDDDDKKKDDDDKDDDDDDDKDDKKKDDDRR',
+    'GGGGGKDDDKDDDKDDDDDDDKDKDDDKDDDK',
+    'GGGGKDDDDDKKKKKKKKKKKKKDDDDDKKKK',
+    '....KDDGDDK...........KDDGDDK...',
+    '....KDDDDDK...........KDDDDDK...',
+    '.....KDDDK.............KDDDK....',
+    '......KKK...............KKK.....',
+  ],
+  /** Fictional politician (invented face) leaning out: white national dress, maroon shawl. */
+  politician: [
+    '....KKKKKK....',
+    '...KKKKKKKK.SS',
+    '...KSSSSSSK.SS',
+    '...SSKSSKSSLSS',
+    '...SSSSSSSSLL.',
+    '...SKKKKKKSLL.',
+    '....KLLLLK.LL.',
+    '..WWLLLLLLWLL.',
+    '..WWWLGGLWWLL.',
+    '..WWWLGGLWWW..',
+    '..WWWLGGLWWW..',
+    '..WWWLGGLWWW..',
+    '..WWWLGGLWWW..',
+    '..WWWLGGLWWW..',
+    '..WWWLLLLWWW..',
+  ],
+  /** Green chilli pickup, 10×12. */
+  chilli: [
+    '......nnn.',
+    '......nn..',
+    '....KNNy..',
+    '.....NNNK.',
+    '...KNNy...',
+    '....NNNK..',
+    '....NNN...',
+    '..KNNy....',
+    '...NNNK...',
+    '...NNN....',
+    '.KNNK.....',
+    'KNK.......',
+  ],
+  /** Lime pickup, 10×10. */
+  lime: [
+    '....nn....',
+    '..KKVVKK..',
+    '.KVLLVVVK.',
+    '.KVLLVVVK.',
+    '.VVVVVVVV.',
+    '.VVVVVVVV.',
+    '.KVVVVTVK.',
+    '.KVVTVVVK.',
+    '..KKVVKK..',
+    '..........',
+  ],
+  /** Lime-and-chilli charm hanging on the bus (2 chillies). */
+  charm2: [
+    '...G...',
+    '...G...',
+    '...G...',
+    '...G...',
+    '...G...',
+    '...G...',
+    '.Ny.yN.',
+    '.NN.NN.',
+    '.NN.NN.',
+    '.NN.NN.',
+    '.NN.NN.',
+    '.KN.NK.',
+    '.......',
+    '.......',
+    '.......',
+    '.......',
+  ],
+  /** Lime-and-chilli charm hanging on the bus (complete, with lime). */
+  charmFull: [
+    '...G...',
+    '...G...',
+    '...G...',
+    '...G...',
+    '..KKK..',
+    '.KVVVK.',
+    '.KVVVK.',
+    '.KVVVK.',
+    '..KKK..',
+    '.Ny.yN.',
+    '.NN.NN.',
+    '.NN.NN.',
+    '.NN.NN.',
+    '.NN.NN.',
+    '.KN.NK.',
+    '.......',
+  ],
+  /** Bus conductor hanging out of the door, shouting. */
+  conductor: [
+    '...BBBBB..SS',
+    '..BBBBBBB.SS',
+    '...SSSSS.HH.',
+    '...SKSKS.HH.',
+    '...SSSSS.HH.',
+    '...SKKKS.HH.',
+    '..HHHBHHHHH.',
+    'HHHHHBHHHHH.',
+    'HHHHHBHHH...',
+    'HHHHHBHHH...',
+    'HHHHHBHHH...',
+    'SSHHHBHHH...',
+    '..HHHBHHH...',
+    '..HHHBHHH...',
+    '...DDDDD....',
+    '...DDDDD....',
+    '...DDDDD....',
+    '...DDDDD....',
+    '...KK.KK....',
+    '...KK.KK....',
   ],
 } satisfies Record<string, string[]>;
 

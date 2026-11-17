@@ -18,7 +18,7 @@ describe('score', () => {
   });
 
   it('increases every frame during a run and faster as speed rises', () => {
-    const w = new World(1);
+    const w = new World(1, { pickups: false });
     // Keep the road empty so the run doesn't end.
     let prev = 0;
     let early = 0;
@@ -61,7 +61,7 @@ describe('score', () => {
 
 /** Score a fresh empty-road run would have at time t (for comparing rates). */
 function scoreAt(_w: World, t: number): number {
-  const w = new World(1);
+  const w = new World(1, { pickups: false });
   while (w.t < t) {
     w.obstacles = [];
     w.step(1 / 60);

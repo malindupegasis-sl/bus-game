@@ -42,7 +42,8 @@ function simulate(seed: number, seconds: number, busLane = 1) {
  * to an adjacent lane that has one. Returns the finished world.
  */
 function runBot(seed: number, seconds: number, onStep?: (w: World) => void): World {
-  const w = new World(seed);
+  // Traffic only: no charm or boost that could save a crash and hide unfairness.
+  const w = new World(seed, { pickups: false });
   while (w.t < seconds && !w.crashed) {
     if (!w.bus.moving) {
       const ivs = w.obstacles.flatMap((o) => occupancy(o, w.speed));
@@ -68,7 +69,8 @@ describe('spawner fairness', () => {
   it('spawns a meaningful amount of traffic of every kind', () => {
     const all = simulate(42, 120);
     expect(all.length).toBeGreaterThan(60);
-    expect(new Set(all.map((a) => a.o.kind))).toEqual(new Set(['lorry', 'tuktuk', 'bike']));
+    const kinds = new Set(all.map((a) => a.o.kind));
+    for (const k of ['lorry', 'tuktuk', 'bike', 'rival']) expect(kinds.has(k as never), k).toBe(true);
   });
 
   it('never blocks all 3 lanes at the same moment', () => {
@@ -91,7 +93,7 @@ describe('spawner fairness', () => {
   });
 
   it('always leaves a reachable gap: a perfect bot on the real World never crashes (180s: warm-up + full ramp + dense traffic)', () => {
-    const count = { lorry: 0, tuktuk: 0, bike: 0 };
+    const count: Record<string, number> = { lorry: 0, tuktuk: 0, bike: 0, convoy: 0, rival: 0 };
     let swerving = 0;
     let busyRuns = 0;
     for (const seed of SEEDS.slice(0, 120)) {
@@ -113,7 +115,10 @@ describe('spawner fairness', () => {
     expect(busyRuns / 120).toBeGreaterThanOrEqual(0.9); // traffic genuinely builds up
     // Spawn mix. v1.1: lorry 61.7%, tuk-tuk 29.1%, motorbike 9.2%.
     // v1.2 moves 5 points from lorries to tuk-tuks: ~57% / ~34% / ~9%.
+    // The core mix is measured among lorries, tuk-tuks and motorbikes; convoys and rivals are extras.
     const total = count.lorry + count.tuktuk + count.bike;
+    expect(count.convoy).toBeGreaterThan(20);
+    expect(count.rival).toBeGreaterThan(60);
     const share = (n: number) => n / total;
     expect(share(count.lorry)).toBeGreaterThan(0.54);
     expect(share(count.lorry)).toBeLessThan(0.6);
@@ -129,7 +134,7 @@ describe('spawner fairness', () => {
   it('a player who never steers does crash (the road is not trivially empty)', () => {
     let crashes = 0;
     for (const seed of SEEDS.slice(0, 30)) {
-      const w = new World(seed);
+      const w = new World(seed, { pickups: false });
       while (w.t < 90 && !w.crashed) w.step(DT);
       if (w.crashed) crashes++;
     }
@@ -150,7 +155,7 @@ describe('spawner fairness', () => {
     const rng = createRng(7);
     const w = new World(1);
     for (let n = 0; n < 1500; n++) {
-      const kind = (['lorry', 'tuktuk', 'bike'] as const)[n % 3];
+      const kind = (['lorry', 'tuktuk', 'bike', 'convoy', 'rival'] as const)[n % 5];
       const lane = n % LANE_COUNT;
       const speed = 110 + rng() * 120;
       const o = makeObstacle(1, kind, lane, 0, speed, rng);

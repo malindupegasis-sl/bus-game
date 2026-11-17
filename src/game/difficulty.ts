@@ -61,14 +61,28 @@ export function maxObstaclesAt(t: number): number {
  *         measured over 180s runs with the warm-up and the bigger bus)
  *   v1.3: lorry 56.4%, tuk-tuk 34.2%, motorbike  9.5%  (same mix; weights re-calibrated because the
  *         74px bus and 20s warm-up change which candidates pass the fairness check)
+ *   v2:   lorry 56.4%, tuk-tuk 34.0%, motorbike  9.6%  (same mix, re-calibrated with convoys and
+ *         rival buses on the road; those are extras on top: ~1 rival / 18 s, ~1 convoy / 50 s)
  * tests/spawner.test.ts checks the mix stays near these numbers.
  */
-export const KIND_WEIGHTS = { lorry: 1.4, tuktuk: 0.87, bike: 0.135 } as const;
+export const KIND_WEIGHTS = { lorry: 1.4, tuktuk: 0.9, bike: 0.115 } as const;
 
 /** The mix uses the real clock (not the warm-up-shifted one), so tuk-tuks still arrive from 8s. */
+/** Extras on top of the core mix: rare convoys (only after the warm-up) and rival buses. */
+export const EXTRA_WEIGHTS = { convoy: 0.06, rival: 0.06 } as const;
+export const RIVAL_FROM = 5; // seconds
+/** At least this long between two convoys. */
+export const CONVOY_COOLDOWN = 30; // seconds
+
 export function kindWeightsAt(t: number): Record<ObstacleKind, number> {
   const tuk = t < DIFFICULTY.tuktukFrom ? 0 : KIND_WEIGHTS.tuktuk * clamp01((t - DIFFICULTY.tuktukFrom) / 20);
-  return { lorry: KIND_WEIGHTS.lorry, tuktuk: tuk, bike: KIND_WEIGHTS.bike };
+  return {
+    lorry: KIND_WEIGHTS.lorry,
+    tuktuk: tuk,
+    bike: KIND_WEIGHTS.bike,
+    convoy: t < DIFFICULTY.warmupTime ? 0 : EXTRA_WEIGHTS.convoy,
+    rival: t < RIVAL_FROM ? 0 : EXTRA_WEIGHTS.rival,
+  };
 }
 
 /** Music playback rate for a given game speed, capped at MAX_MUSIC_RATE. */

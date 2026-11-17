@@ -8,7 +8,13 @@
  * To add a new kind (politician's convoy, rival bus, ...): add it to ObstacleKind and KINDS,
  * give it a sprite in render/sprites.ts and a spawn weight in difficulty.ts.
  */
-export type ObstacleKind = 'lorry' | 'tuktuk' | 'bike';
+export type ObstacleKind = 'lorry' | 'tuktuk' | 'bike' | 'convoy' | 'rival';
+
+/** 5 SUVs, 32px each with 2px gaps. */
+export const CONVOY_SUVS = 5;
+export const CONVOY_SUV_W = 32;
+export const CONVOY_GAP = 2;
+export const CONVOY_LENGTH = CONVOY_SUVS * CONVOY_SUV_W + (CONVOY_SUVS - 1) * CONVOY_GAP; // 168
 
 export interface KindSpec {
   /** Sprite size (px). */
@@ -30,7 +36,15 @@ export const KINDS: Record<ObstacleKind, KindSpec> = {
   tuktuk: { width: 24, height: 20, hitX0: 3, hitX1: 21, halfH: 6, speedFactor: [1.15, 1.3] },
   // Same direction as the bus, so it closes slowly and blocks a lane for longer.
   bike: { width: 34, height: 26, hitX0: 4, hitX1: 30, halfH: 6, speedFactor: [0.42, 0.5] },
+  // Politician's convoy: 5 SUVs (32px, 2px gaps) as one long oncoming block in one lane.
+  convoy: { width: CONVOY_LENGTH, height: 18, hitX0: 2, hitX1: CONVOY_LENGTH - 2, halfH: 7, speedFactor: [1.2, 1.3] },
+  // Same-route rival bus: same direction as you, slower, so you overtake it. Its hitbox is a
+  // little shorter than yours so a lane change next to it clips at the usual point (~40% in).
+  rival: { width: 74, height: 32, hitX0: 6, hitX1: 68, halfH: 9, speedFactor: [0.5, 0.6] },
 };
+
+/** The kinds from v1 whose relative mix is kept (convoy and rival are extras on top). */
+export const CORE_KINDS = ['lorry', 'tuktuk', 'bike'] as const;
 
 /**
  * Bus hitbox, relative to the bus sprite's left edge at BUS_X. The sprite is 74×32 (v1.3, 20%

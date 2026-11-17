@@ -1,5 +1,6 @@
 import { LANE_COUNT, SPAWN_X } from '../config';
-import { kindWeightsAt, maxObstaclesAt, spawnGapAt, speedAt } from './difficulty';
+import { CONVOY_COOLDOWN, kindWeightsAt, maxObstaclesAt, spawnGapAt, speedAt } from './difficulty';
+import { keepsPickupsSafe, type Pickup } from './pickups';
 import { lanesWithPath, occupancy, screenConflict, type Interval } from './fairness';
 import {
   KINDS, TUK_MIN_TELL_TIME, TUK_SWERVE_CHANCE, TUK_SWERVE_MIN_X, TUK_SWERVE_TIME, TUK_TELL_MAX_X, TUK_TELL_TIME,
@@ -10,10 +11,12 @@ import { randInt, randRange, type Rng } from './rng';
 export interface SpawnerState {
   nextSpawnD: number;
   nextId: number;
+  /** Play time of the last convoy (for the cooldown). */
+  lastConvoyT: number;
 }
 
 export function createSpawner(firstSpawnD = 60): SpawnerState {
-  return { nextSpawnD: firstSpawnD, nextId: 1 };
+  return { nextSpawnD: firstSpawnD, nextId: 1, lastConvoyT: -Infinity };
 }
 
 /** How far ahead (seconds) the spawner looks when picking a pessimistic speed. */
@@ -70,12 +73,16 @@ export interface SpawnContext {
   rng: Rng;
   /** Lane the bus is in (or heading to). Spawns must keep a survivable path from here. */
   busLane?: number;
+  /** Pickups on the road: new traffic must never make collecting one force a crash. */
+  pickups?: readonly Pickup[];
 }
 
 /** At most this many motorbikes at once, and never two in the same lane on screen. */
 const MAX_BIKES = 2;
 
-function kindAllowed(kind: ObstacleKind, lane: number, obstacles: readonly Obstacle[]): boolean {
+function kindAllowed(kind: ObstacleKind, lane: number, obstacles: readonly Obstacle[], t: number, s: SpawnerState): boolean {
+  if (kind === 'convoy') return t - s.lastConvoyT >= CONVOY_COOLDOWN && !obstacles.some((o) => o.kind === 'convoy');
+  if (kind === 'rival') return !obstacles.some((o) => o.kind === 'rival');
   if (kind !== 'bike') return true;
   const bikes = obstacles.filter((o) => o.kind === 'bike');
   return bikes.length < MAX_BIKES && !bikes.some((o) => o.lane === lane);
@@ -88,7 +95,7 @@ function kindAllowed(kind: ObstacleKind, lane: number, obstacles: readonly Obsta
  * So a spawn never closes the last gap.
  */
 export function updateSpawner(s: SpawnerState, ctx: SpawnContext): Obstacle | null {
-  const { d, t, obstacles, rng, busLane } = ctx;
+  const { d, t, obstacles, rng, busLane, pickups } = ctx;
   if (d < s.nextSpawnD) return null;
   const speedNow = speedAt(t);
   const speedSafe = speedAt(t + SPEED_LOOKAHEAD);
@@ -105,13 +112,15 @@ export function updateSpawner(s: SpawnerState, ctx: SpawnContext): Obstacle | nu
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const kind = pickKind(rng, t);
     const lane = randInt(rng, 0, LANE_COUNT - 1);
-    if (!kindAllowed(kind, lane, obstacles)) continue;
+    if (!kindAllowed(kind, lane, obstacles, t, s)) continue;
     const cand = makeObstacle(s.nextId, kind, lane, d, speedNow, rng);
     if (obstacles.some((o) => screenConflict(o, cand))) continue;
     const after = lanesWithPath([...base, ...occupancy(cand, speedSafe)], d, speedSafe);
     if (!after.some(Boolean)) continue;
     if (busLane !== undefined && !after[busLane]) continue;
     if (before.some((ok, l) => ok && !after[l])) continue;
+    if (pickups && !keepsPickupsSafe(pickups, d, [...base, ...occupancy(cand, speedSafe)], cand, speedSafe)) continue;
+    if (kind === 'convoy') s.lastConvoyT = t;
     s.nextId++;
     s.nextSpawnD = d + spawnGapAt(t) * speedNow * randRange(rng, 0.7, 1.3);
     return cand;

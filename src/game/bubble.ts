@@ -35,10 +35,47 @@ export function bubbleWindow(o: Obstacle): [number, number] | null {
 const overlaps = (a: Box, b: Box, gap: number) =>
   a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.y < b.y + b.h + gap && b.y < a.y + a.h + gap;
 
+export type Side = 'right' | 'above' | 'below';
+
 /**
- * Bubble placement at distance d. It rides along with the tuk-tuk through and after the swerve:
- * behind it (to its right) by default, or above / below it if that would touch the bus or go off
- * screen. If no spot is clear of the bus, it isn't shown.
+ * Place a w×h bubble next to `anchor` (the thing that's talking), trying the sides in `order`.
+ * A spot is used only if the bubble and its tail are fully on screen (above the HUD) and clear of
+ * `avoid` (the bus). Returns null if no side works.
+ */
+export function placeBubble(
+  anchor: Box,
+  w: number,
+  h: number,
+  avoid: Box | null,
+  order: readonly Side[],
+): { x: number; y: number; tail: BubbleRect['tail']; tailAt: number } | null {
+  const midX = anchor.x + anchor.w / 2;
+  const clampX = (x: number) => Math.max(0, Math.min(VIEW_W - w, x));
+  for (const side of order) {
+    const c =
+      side === 'right'
+        ? { x: anchor.x + anchor.w + 4, y: anchor.y + anchor.h / 2 - h / 2, tail: 'left' as const, tailAt: anchor.y + anchor.h / 2 }
+        : side === 'above'
+          ? { x: clampX(midX - w / 2), y: anchor.y - h - 4, tail: 'down' as const, tailAt: midX }
+          : { x: clampX(midX - w / 2), y: anchor.y + anchor.h + 4, tail: 'up' as const, tailAt: midX };
+    const r = { x: Math.round(c.x), y: Math.round(c.y), tail: c.tail, tailAt: Math.round(c.tailAt) };
+    const onScreen = r.x >= 0 && r.x + w <= VIEW_W && r.y >= 0 && r.y + h <= HUD_TOP;
+    // The tail reaches 3px outside the box toward the speaker: keep that clear of the bus too.
+    const withTail = { x: r.x - 3, y: r.y - 3, w: w + 6, h: h + 6 };
+    if (onScreen && (!avoid || !overlaps(withTail, avoid, 1))) return r;
+  }
+  return null;
+}
+
+/** Bubble size for a phrase in the 5×7 font. */
+export function bubbleSize(text: string, scale: number, textWidth: (s: string) => number) {
+  return { w: textWidth(text) * scale + PAD * 2, h: GLYPH_H * scale + PAD * 2 };
+}
+
+/**
+ * Tuk-tuk bubble placement at distance d. It rides along with the tuk-tuk through and after the
+ * swerve: behind it (to its right) by default, or above / below it if that would touch the bus or
+ * go off screen. If no spot is clear of the bus, it isn't shown.
  */
 export function bubbleRect(
   o: Obstacle,
@@ -49,28 +86,12 @@ export function bubbleRect(
   if (!win || d < win[0] || d > win[1]) return null;
   const { scale } = opts;
   const text = swearFor(o.id);
-  const w = opts.textWidth(text) * scale + PAD * 2;
-  const h = GLYPH_H * scale + PAD * 2;
+  const { w, h } = bubbleSize(text, scale, opts.textWidth);
   const k = KINDS.tuktuk;
   const tx = obstacleX(o, d);
   const tBottom = laneY(obstacleLane(o, d)) + VEHICLE_BASELINE;
   const tTop = tBottom - k.height + 1;
-  const tMidX = tx + k.width / 2;
-  if (tMidX < 0 || tMidX > VIEW_W) return null; // goes with the tuk-tuk when it leaves the screen
-  const clampX = (x: number) => Math.max(0, Math.min(VIEW_W - w, x));
-
-  const raw: BubbleRect[] = [
-    { x: tx + k.width + 4, y: tTop + k.height / 2 - h / 2, w, h, text, scale, tail: 'left', tailAt: tTop + k.height / 2 },
-    { x: clampX(tMidX - w / 2), y: tTop - h - 4, w, h, text, scale, tail: 'down', tailAt: tMidX },
-    { x: clampX(tMidX - w / 2), y: tBottom + 5, w, h, text, scale, tail: 'up', tailAt: tMidX },
-  ];
-  const candidates = raw.map((c) => ({ ...c, x: Math.round(c.x), y: Math.round(c.y), tailAt: Math.round(c.tailAt) }));
-
-  for (const c of candidates) {
-    const onScreen = c.x >= 0 && c.x + c.w <= VIEW_W && c.y >= 0 && c.y + c.h <= HUD_TOP;
-    // The tail reaches 3px outside the box toward the tuk-tuk: keep that clear of the bus too.
-    const withTail = { x: c.x - 3, y: c.y - 3, w: c.w + 6, h: c.h + 6 };
-    if (onScreen && !overlaps(withTail, opts.bus, 1)) return c;
-  }
-  return null;
+  if (tx + k.width / 2 < 0 || tx + k.width / 2 > VIEW_W) return null; // goes with the tuk-tuk when it leaves
+  const at = placeBubble({ x: tx, y: tTop, w: k.width, h: k.height }, w, h, opts.bus, ['right', 'above', 'below']);
+  return at ? { ...at, w, h, text, scale } : null;
 }

@@ -4,9 +4,13 @@ import {
 } from '../config';
 import type { Game } from '../game/game';
 import { formatScore } from '../game/score';
-import { KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
+import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
+import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
+import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
+import { PICKUP_W, pickupX } from '../game/pickups';
+import type { WorldEvent } from '../game/world';
 import { UI_RECTS, type Rect } from '../ui-layout';
-import { bubbleRect, bubbleWindow, type BubbleRect } from '../game/bubble';
+import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels } from './busPose';
 import {
   BUS_GLOW, BUS_SKINS, BUS_WHEELS, FONT_BIG, FONT_SMALL, PALETTE, PALM, PALM_PALETTE, SCENE, SPRITES, type Font,
@@ -14,6 +18,13 @@ import {
 } from './sprites';
 
 type Align = 'left' | 'center' | 'right';
+
+/** Colour-cycling LED strip colours for the Dham Rajina Xpress. */
+const LED_COLORS = ['#ff2a6d', '#ffd400', '#28ff8c', '#2ad4ff', '#a64dff', '#ff7ae6'];
+/** How long the conductor hangs out shouting after the boost starts (s). */
+const CONDUCTOR_TIME = 2;
+/** Deterministic flicker noise in [0, 1) that changes 15 times a second. */
+const flicker = (now: number) => ((Math.imul(Math.floor(now * 15), 2654435761) >>> 0) % 1000) / 1000;
 
 /** Route map polyline (HUD). */
 const ROUTE = (
@@ -108,17 +119,67 @@ export class Renderer {
     return this.pixelMap(SPRITES[name], { ...PALETTE, ...BUS_SKINS[skin] }, key);
   }
 
-  /** Bus body with a given sign-board glow level (palettes built once, not per frame). */
-  private busImage(glow: number): HTMLCanvasElement {
-    const key = `bus:${this.busSkin}:${glow}`;
-    const hit = this.cache.get(key);
-    if (hit) return hit;
+  /** Route number shown on the sign board of your bus and of rival buses. */
+  route = '138';
+
+  private palette(skin: keyof typeof BUS_SKINS, glow: number): Record<string, string | undefined> {
+    const key = `${skin}:${glow}`;
     let pal = this.spritePalettes.get(key);
     if (!pal) {
-      pal = { ...PALETTE, ...BUS_SKINS[this.busSkin], O: BUS_GLOW[glow] };
+      pal = { ...PALETTE, ...BUS_SKINS[skin], O: BUS_GLOW[glow] };
       this.spritePalettes.set(key, pal);
     }
-    return this.pixelMap(SPRITES.bus, pal, key);
+    return pal;
+  }
+
+  /**
+   * Bus body for a skin and sign-board glow level, with the sign board redrawn: the route number
+   * glowing for normal and rival buses; a blank board (for the scrolling name) for the Xpress.
+   */
+  private busImage(skin: keyof typeof BUS_SKINS, glow: number): HTMLCanvasElement {
+    const key = `bus:${skin}:${glow}:${this.route}`;
+    const hit = this.cache.get(key);
+    if (hit) return hit;
+    const base = this.pixelMap(SPRITES.bus, this.palette(skin, glow), `busbase:${skin}:${glow}`);
+    return this.layer(key, base.width, base.height, (g) => {
+      g.drawImage(base, 0, 0);
+      this.rect(55, 0, 19, 6, PALETTE.K, g);
+      if (skin === 'xpress') {
+        // Own livery: magenta band under the windows with the name in chrome-white lettering.
+        this.rect(1, 15, 43, 5, '#b0108c', g);
+        g.drawImage(this.textImage('DHAM RAJINA', '#ffffff', 1, false, FONT_SMALL), 1, 15);
+        this.rect(1, 20, 43, 1, '#f4f4ff', g);
+      } else {
+        const t = this.textImage(this.route, BUS_GLOW[glow], 1, false, FONT_SMALL);
+        g.drawImage(t, 55 + Math.floor((19 - t.width) / 2), 1);
+      }
+    });
+  }
+
+  private scratch: [HTMLCanvasElement, CanvasRenderingContext2D] | null = null;
+
+  /** Dham Rajina Xpress frame: livery + colour-cycling LED strips + the name scrolling on the sign. */
+  private xpressFrame(glow: number, now: number): HTMLCanvasElement {
+    const base = this.busImage('xpress', glow);
+    if (!this.scratch) this.scratch = canvas(base.width, base.height);
+    const [c, g] = this.scratch;
+    g.clearRect(0, 0, c.width, c.height);
+    g.drawImage(base, 0, 0);
+    const phase = Math.floor(now * 12) % LED_COLORS.length;
+    const led = this.layer(`led:${phase}`, base.width, 1, (lg) => {
+      for (let x = 0; x < base.width; x++) {
+        this.rect(x, 0, 1, 1, x % 2 ? '#2a0838' : LED_COLORS[(Math.floor(x / 2) + phase) % LED_COLORS.length], lg);
+      }
+    });
+    g.drawImage(led, 0, 3);
+    g.drawImage(led, 0, 22);
+    // Scrolling LED marquee on the 17px sign board window.
+    const text = this.textImage('DHAM RAJINA XPRESS * ', '#ff7af0', 1, false, FONT_SMALL);
+    const off = Math.floor(now * 20) % text.width;
+    const first = Math.min(17, text.width - off);
+    g.drawImage(text, off, 0, first, 5, 56, 1, first, 5);
+    if (first < 17) g.drawImage(text, 0, 0, 17 - first, 5, 56 + first, 1, 17 - first, 5);
+    return c;
   }
 
   private glyph(font: Font, ch: string) {
@@ -302,10 +363,12 @@ export class Renderer {
   }
 
   private drawList: { y: number; o: Obstacle | null; lane: number }[] = [];
+  private lastOverlay = 0;
 
   private entities(game: Game, now: number, d: number, busPos: number): void {
     const w = game.world;
     this.drawSkids(d);
+    this.drawPickups(game, d, now);
     // Painter's order by lane (no closures or new arrays per frame).
     const list = this.drawList;
     list.length = 0;
@@ -323,6 +386,9 @@ export class Renderer {
 
     // Swearing bubbles go on top of everything on the road.
     for (const o of w.obstacles) if (o.kind === 'tuktuk') this.bubble(o, d);
+    const dt = Math.min(0.1, Math.max(0, now - this.lastOverlay));
+    this.lastOverlay = now;
+    this.overlays(game, d, game.phase === 'paused' ? 0 : dt);
 
     if (game.phase === 'crashed' || game.phase === 'over') {
       const blink = Math.floor(now * 12) % 2 === 0;
@@ -426,8 +492,15 @@ export class Renderer {
     }
     this.ctx.globalAlpha = 1;
 
+    // Which look: the Dham Rajina Xpress while boosted, flickering back during the transition.
+    const c = w.charm;
+    const xpress = c.boostT > 0 || (c.transitionT > 0 && flicker(now) < c.transitionT / TRANSITION_TIME);
+    const img = xpress ? this.xpressFrame(pose.glow, now) : this.busImage(this.busSkin, pose.glow);
+    // Lucky-charm save: blink while invincible.
+    const blink = c.invincibleT > 0 && c.boostT === 0 && c.transitionT === 0 && Math.floor(now * 10) % 2 === 0;
+    if (blink) this.ctx.globalAlpha = 0.3;
+
     // Body: one blit when level; a handful of column groups while tilted / squashed / stretched.
-    const img = this.busImage(pose.glow);
     for (const gr of busGroups(pose, BUS_X)) {
       this.ctx.drawImage(img, gr.sx, 0, gr.sw, img.height, gr.dx, gr.dy, gr.dw, gr.dh);
     }
@@ -436,7 +509,52 @@ export class Renderer {
     for (const wh of wheels) {
       this.ctx.drawImage(this.wheelImage(pose.wheelFrame), wh.x - BUS_WHEELS.r, wh.y - BUS_WHEELS.r);
     }
+
+    // The lime-and-chilli charm hangs at the back of the bus, swinging a little.
+    if (c.chillies === 2) {
+      const charm = this.sprite(c.boostT > 0 ? 'charmFull' : 'charm2');
+      const swing = Math.round(Math.sin(now * 5));
+      this.ctx.drawImage(charm, BUS_X + 1 + swing, ext.top + 5);
+    }
+    this.ctx.globalAlpha = 1;
+
+    // Conductor hangs out of the door and shouts when the boost starts.
+    this.conductorBubble = null;
+    if (c.boostT > BOOST_TIME - CONDUCTOR_TIME) {
+      const k = this.sprite('conductor');
+      const kx = BUS_X + 43;
+      this.ctx.drawImage(k, kx + Math.round(Math.sin(now * 14)), ext.top + 3);
+      this.conductorBubble = { x: kx, y: ext.top, w: k.width, h: ext.bottom - ext.top + 1 };
+    }
+
+    // Sparkles while boosted (and fading out through the transition).
+    if ((c.boostT > 0 || c.transitionT > 0) && !frozen) {
+      const n = c.boostT > 0 ? 2 : 1;
+      for (let i = 0; i < n; i++) {
+        this.sparkles.push({
+          x: r.x - 4 + Math.random() * (r.w + 8), y: r.y - 2 + Math.random() * (r.h + 2), age: 0,
+          col: LED_COLORS[Math.floor(Math.random() * LED_COLORS.length)],
+        });
+      }
+    }
+    if (!frozen) for (const sp of this.sparkles) { sp.age += dt; sp.x -= drift * 0.6 * dt; }
+    let m = 0;
+    for (const sp of this.sparkles) if (sp.age < 0.35) this.sparkles[m++] = sp;
+    this.sparkles.length = Math.min(m, 40);
+    for (const sp of this.sparkles) {
+      const big = sp.age < 0.15;
+      this.rect(sp.x, sp.y, 1, 1, '#ffffff');
+      if (big) {
+        this.rect(sp.x - 1, sp.y, 1, 1, sp.col);
+        this.rect(sp.x + 1, sp.y, 1, 1, sp.col);
+        this.rect(sp.x, sp.y - 1, 1, 1, sp.col);
+        this.rect(sp.x, sp.y + 1, 1, 1, sp.col);
+      }
+    }
   }
+
+  private sparkles: { x: number; y: number; age: number; col: string }[] = [];
+  private conductorBubble: Box | null = null;
 
   private wheelImage(frame: number): HTMLCanvasElement {
     const r = BUS_WHEELS.r;
@@ -481,8 +599,12 @@ export class Renderer {
       this.rect(cx - 4, cy - 2, 8, 4, PALETTE.L);
       return;
     }
+    this.drawBubble(b);
+  }
+
+  /** White bubble with a dark outline (cached per phrase) and a tail pointing at the speaker. */
+  private drawBubble(b: BubbleRect): void {
     this.ctx.drawImage(this.bubbleImage(b), b.x, b.y);
-    // Tail pointing at the tuk-tuk.
     const t = b.tailAt;
     if (b.tail === 'left') {
       this.rect(b.x - 3, t - 1, 4, 3, PALETTE.K);
@@ -497,6 +619,8 @@ export class Renderer {
   }
 
   private obstacle(o: Obstacle, d: number, lane: number, now: number): void {
+    if (o.kind === 'convoy') return this.convoy(o, d, lane, now);
+    if (o.kind === 'rival') return this.rival(o, d, lane);
     const img = this.sprite(o.kind);
     const k = KINDS[o.kind];
     const x = Math.round(obstacleX(o, d));
@@ -528,6 +652,141 @@ export class Renderer {
       });
       this.ctx.drawImage(tell, x - 2, y - 7);
     }
+  }
+
+  /** Five black SUVs with flashing red/blue roof lights; the politician leans out of the middle one. */
+  private convoy(o: Obstacle, d: number, lane: number, now: number): void {
+    const x = Math.round(obstacleX(o, d));
+    if (x > VIEW_W || x + KINDS.convoy.width < 0) return;
+    const suv = this.sprite('suv');
+    const y = Math.round(laneY(lane) + VEHICLE_BASELINE + 1 - suv.height);
+    const step = CONVOY_SUV_W + CONVOY_GAP;
+    for (let i = 0; i < CONVOY_SUVS; i++) this.ctx.drawImage(suv, x + i * step, y);
+    const phase = Math.floor(now * 8) % 2;
+    const lights = this.layer(`convoyLights:${phase}`, KINDS.convoy.width, 3, (g) => {
+      for (let i = 0; i < CONVOY_SUVS; i++) {
+        const sx = i * step;
+        const redOn = (i + phase) % 2 === 0;
+        this.rect(sx + 9, 0, 4, 2, redOn ? '#ff2020' : '#601010', g);
+        this.rect(sx + 14, 0, 4, 2, redOn ? '#102060' : '#2060ff', g);
+        this.rect(sx + 8, 2, 11, 1, PALETTE.K, g);
+        if (redOn) this.rect(sx + 10, 0, 1, 1, '#ffc0c0', g);
+        else this.rect(sx + 16, 0, 1, 1, '#c0d0ff', g);
+      }
+    });
+    this.ctx.drawImage(lights, x, y - 1);
+    // Fictional politician leaning out of the middle SUV, waving, shouting a campaign promise.
+    const pol = this.sprite('politician');
+    const px = x + 2 * step + 9;
+    const py = y - 8 + (Math.floor(now * 4) % 2);
+    this.ctx.drawImage(pol, px, py);
+    if (px > 96 && px < VIEW_W - 8) this.politicianBubbles.push({ text: pick(PROMISES, o.id), anchor: { x: px, y: py, w: pol.width, h: pol.height } });
+  }
+
+  private politicianBubbles: { text: string; anchor: Box }[] = [];
+
+  /** A same-route rival bus (blue and yellow livery, same route number on its sign). */
+  private rival(o: Obstacle, d: number, lane: number): void {
+    const x = Math.round(obstacleX(o, d));
+    if (x > VIEW_W || x + KINDS.rival.width < 0) return;
+    const wheelY = Math.round(laneY(lane)) + VEHICLE_BASELINE - BUS_WHEELS.r;
+    const img = this.busImage('rival', 1);
+    this.ctx.drawImage(img, x, wheelY - BUS_WHEELS.y);
+    const frame = Math.floor(d / 5) % 4;
+    for (const wx of BUS_WHEELS.xs) this.ctx.drawImage(this.wheelImage(frame), x + wx - BUS_WHEELS.r, wheelY - BUS_WHEELS.r);
+  }
+
+  /** Chillies and limes on the road, bobbing and glinting. */
+  private drawPickups(game: Game, d: number, now: number): void {
+    for (const p of game.world.pickups) {
+      if (p.collected) continue;
+      const x = Math.round(pickupX(p, d));
+      if (x > VIEW_W || x + PICKUP_W < 0) continue;
+      const img = this.sprite(p.kind);
+      const cy = Math.round(laneY(p.lane));
+      this.rect(x + 1, cy + 9, PICKUP_W - 2, 1, 'rgba(0,0,0,0.35)');
+      const y = cy - 4 - Math.round(1.5 + 1.5 * Math.sin(now * 6 + p.id));
+      this.ctx.drawImage(img, x, y);
+      if (Math.floor(now * 3 + p.id) % 3 === 0) this.rect(x + 7, y + 1, 1, 1, '#ffffff');
+    }
+  }
+
+  /** Speech bubbles for the politician and the conductor (they never cover the bus). */
+  private speech(text: string, anchor: Box, order: readonly ('right' | 'above' | 'below')[]): void {
+    const { w, h } = bubbleSize(text, 1, this.bubbleMeasure);
+    const at = placeBubble(anchor, w, h, this.busRect, order);
+    if (!at) return;
+    this.drawBubble({ ...at, w, h, text, scale: 1 });
+  }
+
+  // ---------------------------------------------------------------- events, popups, captions
+
+  private popups: { text: string; color: string; age: number }[] = [];
+  private captionQueue: CaptionKey[] = [];
+  private caption: { key: CaptionKey; age: number } | null = null;
+  private fallingCharm: { x: number; y: number; vy: number; age: number } | null = null;
+  private shoutN = 0;
+  private conductorText = CONDUCTOR_SHOUTS[0] as string;
+
+  /** World events that need a visual: captions, popups, the falling charm, the conductor's shout. */
+  onEvent(e: WorldEvent): void {
+    if (e.type === 'seen') this.captionQueue.push(e.what);
+    else if (e.type === 'overtake') this.popups.push({ text: `+${e.bonus} OVERTAKE!`, color: PALETTE.y, age: 0 });
+    else if (e.type === 'charm' && e.what === 'saved') {
+      this.popups.push({ text: 'LUCKY CHARM!', color: '#7cfc7c', age: 0 });
+      this.fallingCharm = { x: BUS_X + 1, y: this.busRect.y + 5, vy: -40, age: 0 };
+    } else if (e.type === 'charm' && e.what === 'boostStart') {
+      this.conductorText = pick(CONDUCTOR_SHOUTS, this.shoutN++);
+      this.popups.push({ text: 'DHAM RAJINA XPRESS!', color: '#ff7af0', age: 0 });
+    } else if (e.type === 'charm' && e.what === 'charmHung') {
+      this.popups.push({ text: 'LUCKY CHARM ON!', color: '#7cfc7c', age: 0 });
+    }
+  }
+
+  private overlays(game: Game, d: number, dt: number): void {
+    // Politician and conductor speech bubbles.
+    for (const pb of this.politicianBubbles) this.speech(pb.text, pb.anchor, ['above', 'below', 'right']);
+    this.politicianBubbles.length = 0;
+    if (this.conductorBubble) this.speech(this.conductorText, this.conductorBubble, ['above', 'below']);
+
+    // The charm falling off after a lucky save.
+    const f = this.fallingCharm;
+    if (f) {
+      f.age += dt;
+      f.vy += 300 * dt;
+      f.y += f.vy * dt;
+      f.x -= (25 + game.world.speed * 0.6) * dt;
+      if (f.age > 0.9) this.fallingCharm = null;
+      else this.ctx.drawImage(this.sprite('charm2'), Math.round(f.x), Math.round(f.y));
+    }
+
+    // Popups float up from in front of the bus (never over it).
+    let n = 0;
+    for (const p of this.popups) {
+      p.age += dt;
+      if (p.age < 1.1) this.popups[n++] = p;
+    }
+    this.popups.length = n;
+    this.popups.forEach((p, i) => {
+      const x = Math.min(VIEW_W - 4 - this.textWidth(p.text), this.busRect.x + this.busRect.w + 4);
+      const y = Math.max(10, this.busRect.y + 6 + i * 7 - Math.round(p.age * 10));
+      if (p.age > 0.8) this.ctx.globalAlpha = Math.max(0, (1.1 - p.age) / 0.3);
+      this.text(p.text, x, y, p.color, 1, 'left', true);
+      this.ctx.globalAlpha = 1;
+    });
+
+    // Captions: one at a time in the thin strip above the road, clear of the mute button.
+    if (!this.caption && this.captionQueue.length) this.caption = { key: this.captionQueue.shift()!, age: 0 };
+    const c = this.caption;
+    if (c) {
+      c.age += dt;
+      if (c.age > CAPTION_TIME) this.caption = null;
+      else {
+        this.rect(0, 0, 232, ROAD_TOP, 'rgba(0,0,0,0.55)');
+        this.text(CAPTIONS[c.key], 116, 2, '#ffffff', 1, 'center', false);
+      }
+    }
+    void d;
   }
 
   // ---------------------------------------------------------------- HUD
@@ -604,12 +863,34 @@ export class Renderer {
     const top = HUD_TOP;
     this.ctx.drawImage(this.hudPanel(), 0, top);
     this.text(`HI ${game.highScore}`, 71, top + 4, SCENE.lcdOn, 1, 'right', false);
-    this.lcd(String(Math.min(999999, w.score)).padStart(6, ' '), 10, top + 10);
+    this.lcd(String(Math.min(99999, w.score)).padStart(5, ' '), 10, top + 10);
+    this.charmIcon(game, now, 62, top + 10);
     const [px, py] = this.routePoint((d % ROUTE_DISTANCE) / ROUTE_DISTANCE);
     if (Math.floor(now * 4) % 2 === 0 || game.phase !== 'playing') this.rect(px - 1, py - 1, 3, 3, SCENE.mapDot);
     const kmh = Math.round(w.crashed || game.phase === 'title' ? 0 : w.speed * KMH_PER_SPEED);
     this.ctx.drawImage(this.needle(kmh), 171 - 16, top + 24 - 16);
     this.lcd(String(kmh).padStart(3, ' '), 205, top + 5);
+  }
+
+  /** HUD charm progress: ghost (empty), 1 chilli, 2 chillies, complete + blinking while boosted. */
+  private charmIcon(game: Game, now: number, x: number, y: number): void {
+    const c = game.world.charm;
+    const stage = c.boostT > 0 ? 3 : c.chillies;
+    const img = this.layer(`charmIcon:${stage}`, 9, 14, (g) => {
+      if (stage === 0) {
+        g.globalAlpha = 0.3;
+        g.drawImage(this.sprite('charmFull'), 1, -2);
+        g.globalAlpha = 1;
+      } else if (stage === 1) {
+        g.drawImage(this.sprite('charm2'), 1, -2);
+        g.clearRect(5, 0, 4, 14); // only the first chilli
+        g.globalAlpha = 0.3;
+        g.drawImage(this.sprite('charm2'), 1, -2);
+        g.globalAlpha = 1;
+      } else g.drawImage(this.sprite(stage === 3 ? 'charmFull' : 'charm2'), 1, -2);
+    });
+    if (stage === 3 && Math.floor(now * 8) % 2 === 0) this.rect(x - 1, y - 1, 11, 16, '#ff7af0');
+    this.ctx.drawImage(img, x, y);
   }
 
   private routePoint(p: number): [number, number] {

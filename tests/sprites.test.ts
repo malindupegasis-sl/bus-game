@@ -17,7 +17,11 @@ describe('sprites', () => {
   });
 
   it('obstacle sprite sizes match their specs and hitboxes sit inside the sprite', () => {
+    // The convoy (5 SUVs) and the rival (bus body + wheels) are drawn from other sprites.
+    expect(KINDS.convoy.width).toBe(5 * SPRITES.suv[0].length + 4 * 2);
+    expect(KINDS.rival.width).toBe(SPRITES.bus[0].length);
     for (const [kind, spec] of Object.entries(KINDS)) {
+      if (kind === 'convoy' || kind === 'rival') continue;
       const rows = SPRITES[kind as keyof typeof SPRITES];
       expect(rows[0].length, kind).toBe(spec.width);
       expect(rows.length, kind).toBe(spec.height);

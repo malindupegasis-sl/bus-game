@@ -41,21 +41,33 @@ Reference images are style-only: never copy them or commit them.
   the owner's ear to confirm on iPhone.
 
 ## Stage 1: gameplay
-- [ ] 1.1 Lime-and-chilli boost: chilli pickups; 2 chillies hang a charm on the back of the bus; lime appears only after 2 chillies; lime completes the charm and starts the boost
-- [ ] 1.2 Conductor hangs out of the door and shouts (speech bubble) when the boost starts
-- [ ] 1.3 Lucky charm: saves one crash; charm falls off, 1.5 s blinking invincibility, collecting restarts from zero
-- [ ] 1.4 After the boost the charm comes off and collecting restarts from zero
-- [ ] 1.5 HUD charm-progress icon (empty / 1 chilli / 2 chillies)
-- [ ] 1.6 Pickups are never placed where collecting one forces a crash
-- [ ] 1.7 Dham Rajina Xpress: purple/pink/magenta party bus, chrome, colour-cycling LED strips, name on the sign board; short transition back
-- [ ] 1.8 Boost effects: invincible with sparkles, road 1.3x, double score, 6 s
-- [ ] 1.9 Chipmunk music during the boost (1.35x, preservesPitch off), normal afterwards
-- [ ] 1.10 Politician's convoy: 5 black SUVs in one lane, flashing red/blue lights, after the warm-up only, rare
-- [ ] 1.11 Fictional politician (white national dress, maroon shawl, invented face) shouting a campaign promise
-- [ ] 1.12 Rival same-route buses travelling your way; overtaking one gives +50 with an "OVERTAKE!" popup; no penalty
-- [ ] 1.13 First-appearance captions for each obstacle and pickup, short and out of the way
-- [ ] 1.14 Tests: convoy fairness (long lane block, always a path), rival bonus scoring, charm states, lucky-charm save, pickups never force a crash
+- [x] 1.1 Lime-and-chilli boost: chilli pickups; 2 chillies hang a charm on the back of the bus; lime appears only after 2 chillies; lime completes the charm and starts the boost
+- [x] 1.2 Conductor hangs out of the door and shouts (speech bubble) when the boost starts
+- [x] 1.3 Lucky charm: saves one crash; charm falls off, 1.5 s blinking invincibility, collecting restarts from zero
+- [x] 1.4 After the boost the charm comes off and collecting restarts from zero
+- [x] 1.5 HUD charm-progress icon (empty / 1 chilli / 2 chillies)
+- [x] 1.6 Pickups are never placed where collecting one forces a crash
+- [x] 1.7 Dham Rajina Xpress: purple/pink/magenta party bus, chrome, colour-cycling LED strips, name on the sign board; short transition back
+- [x] 1.8 Boost effects: invincible with sparkles, road 1.3x, double score, 6 s
+- [x] 1.9 Chipmunk music during the boost (1.35x, preservesPitch off), normal afterwards
+- [x] 1.10 Politician's convoy: 5 black SUVs in one lane, flashing red/blue lights, after the warm-up only, rare
+- [x] 1.11 Fictional politician (white national dress, maroon shawl, invented face) shouting a campaign promise
+- [x] 1.12 Rival same-route buses travelling your way; overtaking one gives +50 with an "OVERTAKE!" popup; no penalty
+- [x] 1.13 First-appearance captions for each obstacle and pickup, short and out of the way
+- [x] 1.14 Tests: convoy fairness (long lane block, always a path), rival bonus scoring, charm states, lucky-charm save, pickups never force a crash
 - [ ] 1.15 Stage 1 checked headless at 390px portrait + landscape, deployed and checked live -> STOP
+
+### Stage 1 notes
+- Built together (they share the World and renderer), so items 1.1-1.14 landed in one commit rather than one each.
+- Traffic mix kept: weights re-calibrated with convoys and rivals on the road -> measured lorry 56.4%,
+  tuk-tuk 34.0%, motorbike 9.6% (v1.3: 56.4/34.2/9.5); ~50% of tuk-tuks swerve. Extras on top:
+  ~1 rival per 18 s, ~1 convoy per 50 s after the warm-up (30 s cooldown).
+- Changed for new features (owner asked to be told): HUD score shows 5 digits to make room for the
+  charm icon; rival buses get a slightly shorter hitbox (halfH 9) so a lane change beside one clips at
+  the usual ~40% point; fairness tests now run traffic-only so the charm/boost can't hide a crash.
+- Pickup safety is checked against all traffic up to the moment it is collected; after that the
+  normal rule protects the bus's actual lane.
+- Music speed follows the base difficulty speed, not the boost's 1.3x (found in testing).
 
 ## Stage 2: bus customisation
 - [ ] 2.1 Garage screen from the start menu: bus colours

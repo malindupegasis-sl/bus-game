@@ -24,6 +24,20 @@ npm run icons    # regenerate home-screen icons from the bus sprite
 Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 (`.github/workflows/deploy.yml`).
 
+## Gameplay extras (v2)
+
+- **Lime and chilli:** collect 2 chillies to hang the charm on the bus (it saves you from one
+  crash), then a lime appears; collect it for the **Dham Rajina Xpress** boost: 6 s invincible,
+  road 1.3x, double score, chipmunk music. Pickups are never placed where collecting one forces
+  a crash.
+- **Politician's convoy:** 5 SUVs in one lane after the warm-up, rarely (30 s cooldown).
+- **Rival buses** on your route: overtake one for +50.
+- **Captions** explain each thing the first time it appears in a run.
+- **Debug overlay:** tap the HUD score 5 times (FPS, music and charm status).
+
+The boost bus is an affectionate parody with its own livery; it doesn't copy any real operator's
+paint job or logo. The politician is fictional.
+
 ## Music
 
 Music: *Nandana Sihina Gange* by Sangeeth Wijesuriya (`public/audio/song.mp3`).
