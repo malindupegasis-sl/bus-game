@@ -126,7 +126,8 @@ Reference images are style-only: never copy them or commit them.
 - [x] S.3 Start screen: controls hint and "BEST ON ROUTE" removed; game over shows "BEST: n"; title ~10% bigger; music credit ~50% smaller (HTML text, 8px floor on small portraits)
 - [x] S.4 Single high score: the original key, which already holds the player's 138 score
 - [x] S.5 Rotation bug: layout uses the real visible area (visualViewport), re-lays out immediately on rotation/resize/visualViewport/ResizeObserver events plus re-checks at 100/300/600/1000 ms and a 400 ms safety timer (no dependence on animation frames); body fixed, nothing overflows, zoom snapped back to 1x if it ever happens. Tested: 6 rotations each on the start screen, mid-run and game over, plus fast back-and-forth and toolbar changes, in WebKit and Chromium at 390x844 and 375x667
-- [ ] S.6 Deployed and checked live in WebKit and Chromium -> STOP for the owner to test
+- [x] S.6 Deployed and checked live in WebKit and Chromium (9c0ff6b): rotation stress test (start, mid-run, game over; 390x844 and 375x667) passed in both engines; WebKit play checks in portrait + landscape; Chromium controls and overlay checks; 103 unit tests incl. fairness
+- **Waiting for the owner to test on the iPhone (Safari and Chrome).**
 
 Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 
