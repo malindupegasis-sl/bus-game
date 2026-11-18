@@ -185,3 +185,4 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] G.4 supabase/analytics.sql: runs per day, unique players, average run length, score distribution (tested on a local copy)
 - [x] G.5 Tests: 5 unit tests (buckets, deferred sending, queue while loading, blocked, GoatCounter errors)
 
+- [x] G.6 Deployed (08ffa74) and checked live in Chromium (portrait) and WebKit (landscape): script loads with its integrity hash; page view, run-start, run-end/0-500, leaderboard-viewed and share-whatsapp sent; no nickname or exact score in any request; no cookies; with GoatCounter blocked the game plays normally at ~60 fps with no errors. One real run sent to busgamemalindu (2026-11-18 12:35 UTC, iPhone user agent): 5 hits, all accepted (HTTP 200). Supabase was faked in these tests (no new leaderboard rows). Owner confirms on the dashboard.
