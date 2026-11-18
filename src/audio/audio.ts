@@ -13,8 +13,17 @@ const WATCH_EVERY = 250;
  */
 const RATE_STEP = 0.04;
 const RATE_MIN_INTERVAL = 4000; // ms
-/** Chipmunk mode during the Dham Rajina Xpress boost: faster and higher (pitch NOT preserved). */
+/**
+ * Dham Rajina Xpress boost: the song plays 1.35x faster. The pitch is NOT changed any more: on iOS
+ * WebKit, flipping preservesPitch on a playing element swaps the player's time-pitch algorithm, and
+ * that could leave the song "playing" (time advancing) but silent for the rest of the run - which
+ * no watchdog can see. preservesPitch is set once, before the file loads, and never touched again.
+ */
 export const CHIPMUNK_RATE = 1.35;
+/** How many recent audio events the debug overlay shows. */
+export const AUDIO_LOG_SIZE = 8;
+/** While play() is being refused, the watchdog still retries this often (ms). */
+const RETRY_REFUSED_EVERY = 3000;
 
 function loadMuted(): boolean {
   try {
@@ -59,17 +68,13 @@ export class AudioManager {
     return this.chipmunk ? CHIPMUNK_RATE : this.rate;
   }
 
-  /** Boost on/off: chipmunk mode (1.35x, pitch goes up), then back to normal. */
+  /** Boost on/off: the song speeds up to 1.35x, then back to the normal rate. Only playbackRate changes. */
   setBoost(on: boolean): void {
     if (this.chipmunk === on) return;
     this.chipmunk = on;
     const el = this.song;
-    if (el) {
-      el.preservesPitch = !on;
-      (el as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = !on;
-      el.playbackRate = this.effRate;
-    }
-    this.note(on ? 'chipmunk mode on' : 'chipmunk mode off');
+    if (el) el.playbackRate = this.effRate;
+    this.note(`boost ${on ? 'on' : 'off'}: rate x${this.effRate.toFixed(2)}`);
   }
   private step = 0;
   private nextStepTime = 0;
@@ -81,6 +86,9 @@ export class AudioManager {
   private stuckFor = 0;
   restarts = 0;
   lastEvent = 'none';
+  /** Recent audio events (newest last), for the debug overlay and tests. */
+  readonly log: string[] = [];
+  private lastRefusedRetry = 0;
 
   constructor() {
     void this.probeSong();
@@ -102,7 +110,13 @@ export class AudioManager {
   }
 
   private note(e: string): void {
+    if (e === this.lastEvent && this.log.length) {
+      this.log[this.log.length - 1] = this.log[this.log.length - 1].replace(/( x(\d+))?$/, (_m, _a, n) => ` x${(Number(n) || 1) + 1}`);
+      return;
+    }
     this.lastEvent = e;
+    this.log.push(`${(performance.now() / 1000).toFixed(1)}s ${e}`);
+    if (this.log.length > AUDIO_LOG_SIZE) this.log.shift();
   }
 
   /** Call from every user-gesture handler. Cheap after the first time. */
@@ -145,11 +159,8 @@ export class AudioManager {
     this.wantMusic = true;
     this.rate = 1;
     this.chipmunk = false;
-    if (this.song) {
-      this.song.preservesPitch = true;
-      (this.song as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = true;
-    }
     this.lastRateChange = -Infinity;
+    this.note('run start: music on');
     if (this.ctx) this.beginMusic();
   }
 
@@ -202,6 +213,7 @@ export class AudioManager {
     if (bigEnough && now - this.lastRateChange >= RATE_MIN_INTERVAL) {
       this.rate = next;
       this.lastRateChange = now;
+      this.note(`speed-up: rate x${this.effRate.toFixed(2)}`);
     }
   }
 
@@ -219,16 +231,19 @@ export class AudioManager {
   // ------------------------------------------------------------ song file
 
   private createSong(): void {
-    const el = new Audio(SONG_URL);
-    el.preload = 'auto';
-    el.loop = false; // looped by hand between SONG_LOOP points (the file has silence at both ends)
+    const el = new Audio();
+    // Pitch handling is fixed for the element's whole life, set before the file starts loading.
     el.preservesPitch = true;
     (el as unknown as { webkitPreservesPitch: boolean }).webkitPreservesPitch = true;
+    el.preload = 'auto';
+    el.loop = false; // looped by hand between SONG_LOOP points (the file has silence at both ends)
     el.muted = this.muted;
+    el.src = SONG_URL;
     el.addEventListener('error', () => this.songFailed());
     el.addEventListener('pause', () => {
-      if (!this.heldByGame && this.playing && this.usingSong) this.note('song paused by the system');
+      this.note(!this.heldByGame && this.playing && this.usingSong ? 'song paused by the system' : 'song paused');
     });
+    el.addEventListener('playing', () => this.note(`song playing x${el.playbackRate.toFixed(2)}`));
     el.addEventListener('stalled', () => this.note('song stalled (network)'));
     el.addEventListener('waiting', () => this.note('song buffering'));
     el.addEventListener('ended', () => {
@@ -246,13 +261,34 @@ export class AudioManager {
     el.play().then(() => (this.pendingResume = false)).catch((e) => this.onPlayError(e));
   }
 
+  /** Reload a stuck element and carry on from the same spot once it knows its length again. */
+  private reloadSong(el: HTMLAudioElement): void {
+    const t = el.currentTime;
+    el.addEventListener(
+      'loadedmetadata',
+      () => {
+        try {
+          el.currentTime = t;
+        } catch {
+          /* keep the start */
+        }
+      },
+      { once: true },
+    );
+    el.load();
+    this.playSong();
+  }
+
   /** Mobile browsers refuse play() until a real gesture: wait for one instead of giving up. */
   private onPlayError(e: unknown): void {
     const name = e instanceof DOMException ? e.name : '';
     if (name === 'NotAllowedError') {
       this.pendingResume = true;
-      this.note('song needs a tap to resume');
-    } else if (name !== 'AbortError') this.songFailed(); // AbortError = interrupted by pause(), harmless
+      this.note('play() refused: waiting for a tap');
+    } else if (name !== 'AbortError') {
+      this.note(`play() failed: ${name || String(e)}`);
+      this.songFailed();
+    } // AbortError = interrupted by pause() or load(), harmless
   }
 
   /** The file couldn't be loaded or decoded: fall back to the chiptune for good. */
@@ -287,6 +323,12 @@ export class AudioManager {
     const dt = (nowMs - this.lastWatch) / 1000;
     this.lastWatch = nowMs;
     if (el && el.playbackRate !== this.effRate) el.playbackRate = this.effRate;
+    // play() refused: a tap normally fixes it (unlock), but keep trying now and then anyway.
+    if (this.pendingResume && active && el && this.usingSong && nowMs - this.lastRefusedRetry >= RETRY_REFUSED_EVERY) {
+      this.lastRefusedRetry = nowMs;
+      this.note('retrying refused play()');
+      this.playSong();
+    }
 
     const songTime = el ? el.currentTime : 0;
     const progressing = !!el && !el.paused && Math.abs(songTime - this.lastSongTime) > 0.01;
@@ -312,17 +354,18 @@ export class AudioManager {
     } else if (action === 'reload' && el) {
       this.note('song stuck: reloading');
       this.restarts++;
-      const t = el.currentTime;
-      el.load();
-      el.currentTime = t;
       this.stuckFor = 0;
-      this.playSong();
+      this.reloadSong(el);
     }
   }
 
   /** Chiptune fallback pitch: up with the chipmunk boost. */
   private get pitch(): number {
     return this.chipmunk ? CHIPMUNK_RATE : 1;
+  }
+
+  get boosting(): boolean {
+    return this.chipmunk;
   }
 
   /** For tests and the debug overlay. */

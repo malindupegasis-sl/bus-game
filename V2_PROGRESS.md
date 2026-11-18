@@ -12,7 +12,7 @@ Reference images are style-only: never copy them or commit them.
 - No boost sound file. Conductor gets a speech bubble only; the chipmunk song is enough.
 - Boost bus name: "Dham Rajina Xpress" as an affectionate parody, own livery design (no copied paint job or logo).
 - Boost: invincible with sparkles, road 1.3x, double score, 6 s, ~1 s transition back.
-- Chipmunk mode: song at 1.35x with preservesPitch off, during the boost only.
+- Chipmunk mode: song at 1.35x with preservesPitch off, during the boost only. (Stage A: pitch change dropped, the song is only sped up to 1.35x; see below.)
 - Rival buses: route 138 until Stage 3, route 1 for Colombo-Kandy; +50 "OVERTAKE!" bonus, no penalty.
 - Lucky charm: saves one crash from the 2nd chilli until the boost ends; 1.5 s blinking invincibility; collecting restarts from zero.
 
@@ -139,6 +139,14 @@ Reference images are style-only: never copy them or commit them.
 - [x] K.7 Performance: 60 fps (no frame over 20 ms) with a knockout every ~150 ms, 4x CPU throttle, 390x844 @3x
 - [x] K.8 Deployed and checked live in WebKit and Chromium (7344dc4): portrait + landscape in both engines: loads clean, live hook still read-only, debug overlay SCREEN SHAKE button toggles, doesn't steer and is remembered after reload, normal crash outside the boost, no page errors; WebKit play checks and the rotation stress test re-run and passed
 - **Waiting for the owner to test on the iPhone (Safari and Chrome).**
+
+## Stage A: music cutting out (~2,000 points, Chrome on iOS)
+- [x] A.1 Cause: every boost start/end flipped `preservesPitch` on the playing song. On iOS WebKit (Safari and Chrome both) that swaps the player's time-pitch algorithm mid-playback, which can leave the element "playing" with its time advancing but no sound. The watchdog couldn't see that, so the music never came back. The first boost usually lands around 2,000 points, which matches the report. (Could not be reproduced in desktop WebKit, which doesn't use AVFoundation.)
+- [x] A.2 Fix: `preservesPitch` is set once, before the file loads, and never written again. The boost only raises the speed to 1.35x (pitch preserved), so there's no chipmunk pitch any more. The chiptune fallback still goes up in pitch (Web Audio, unaffected).
+- [x] A.3 Watchdog: still restarts a paused song and nudges/reloads a stuck one at the current (boost) rate; a reload now restores the position after the file's metadata loads (setting it straight after load() was ignored); a refused play() is retried every 3 s as well as on the next tap
+- [x] A.4 Debug overlay lists the last 6 audio events with times (run start, boost on/off with the rate, speed-ups, playing/paused/buffering/stalled, play() refused or failed, watchdog restarts and reloads)
+- [x] A.5 Tests: 20 boosts in a row with a fake element (pitch never written, playing throughout, rate 1.35 <-> normal); watchdog recovers a pause during a boost and a frozen song after one. WebKit and Chromium dev build: 5 real boosts in a row plus a system pause mid-boost: song kept playing (time advancing) at 1.35x during and the normal rate after, preservesPitch never written, no errors
+- [ ] A.6 Deployed and checked live -> STOP for phone testing
 
 Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 

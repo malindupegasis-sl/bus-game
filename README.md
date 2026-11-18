@@ -28,7 +28,7 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 
 - **Lime and chilli:** collect 2 chillies to hang the charm on the bus (it saves you from one
   crash), then a lime appears; collect it for the **Dham Rajina Xpress** boost: 11 s,
-  road 1.3x, double score, chipmunk music. Pickups are never placed where collecting one forces
+  road 1.3x, double score, music 1.35x faster. Pickups are never placed where collecting one forces
   a crash.
 - **Knockouts:** during the boost the bus knocks vehicles off the road instead of crashing:
   +25 each (+50 with the boost's double score), with a combo counter (x2, x3…) for hits within

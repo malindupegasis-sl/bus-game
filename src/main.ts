@@ -142,12 +142,12 @@ function isOnScore(clientX: number, clientY: number): boolean {
 const debug = new DebugOverlay(() => {
   const s = audio.songState;
   const music = audio.source === 'song' && s
-    ? `MUSIC song ${s.playing ? 'playing' : 'PAUSED'} ${s.time.toFixed(1)}s x${s.rate.toFixed(2)}${s.pitchKept ? '' : ' chipmunk'}`
+    ? `MUSIC song ${s.playing ? 'playing' : 'PAUSED'} ${s.time.toFixed(1)}s x${s.rate.toFixed(2)}${audio.boosting ? ' (boost)' : ''}`
     : `MUSIC ${audio.source}`;
   return [
     music,
     `AUDIO CTX ${audio.contextState}  recoveries ${audio.restarts}`,
-    `LAST ${audio.lastEvent}`,
+    ...audio.log.slice(-6).map((l) => `  ${l}`),
     `RUN ${game.phase} t=${game.world.t.toFixed(1)}s  vehicles ${game.world.obstacles.length}  particles ${renderer.particleCount}`,
     `CHARM chillies ${game.world.charm.chillies}${game.world.charm.boostT > 0 ? '  BOOST' : ''}${game.world.invincible ? '  invincible' : ''}  bonus ${game.world.bonus}`,
     `KNOCKOUTS ${game.world.knockouts}  combo x${game.world.combo.count}  wrecks ${renderer.fx.wreckCount}  fx ${renderer.fx.particleCount}`,
@@ -333,6 +333,7 @@ const hook: Record<string, unknown> = {
     fps: debug.fps,
     audioCtx: audio.contextState,
     recoveries: audio.restarts,
+    audioLog: [...audio.log],
   }),
 };
 if (import.meta.env.DEV) Object.assign(hook, { game, audio });
