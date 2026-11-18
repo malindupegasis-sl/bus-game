@@ -146,7 +146,8 @@ Reference images are style-only: never copy them or commit them.
 - [x] A.3 Watchdog: still restarts a paused song and nudges/reloads a stuck one at the current (boost) rate; a reload now restores the position after the file's metadata loads (setting it straight after load() was ignored); a refused play() is retried every 3 s as well as on the next tap
 - [x] A.4 Debug overlay lists the last 6 audio events with times (run start, boost on/off with the rate, speed-ups, playing/paused/buffering/stalled, play() refused or failed, watchdog restarts and reloads)
 - [x] A.5 Tests: 20 boosts in a row with a fake element (pitch never written, playing throughout, rate 1.35 <-> normal); watchdog recovers a pause during a boost and a frozen song after one. WebKit and Chromium dev build: 5 real boosts in a row plus a system pause mid-boost: song kept playing (time advancing) at 1.35x during and the normal rate after, preservesPitch never written, no errors
-- [ ] A.6 Deployed and checked live -> STOP for phone testing
+- [x] A.6 Deployed and checked live (b68394a) in WebKit and Chromium: song plays, audio events show in the debug overlay, WebKit play checks, knockout/overlay checks, no page errors. (Boosts can't be triggered on the live site; the 5-boost test ran on the dev build.)
+- **Waiting for the owner to test on the iPhone (Chrome and Safari).** Then Stage B (shared leaderboard).
 
 Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 
