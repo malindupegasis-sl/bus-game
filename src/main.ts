@@ -13,6 +13,7 @@ import { HUD, UI_RECTS, type Rect } from './ui-layout';
 import { SupabaseLeaderboard, type Board } from './leaderboard/api';
 import { loadName, saveName } from './leaderboard/nickname';
 import { NamePanel, OverPanel } from './ui/panels';
+import { scoreBucket, track } from './analytics';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -68,16 +69,22 @@ function askName(first: boolean): void {
 /** The leaderboard for the run that just ended (null = loading or unavailable). */
 let board: Board | null = null;
 let boardRun = 0;
+/** The leaderboard request for this run has finished (loaded or failed), and whether that was counted. */
+let boardLoaded = false;
+let boardTracked = false;
 
 function submitRun(): void {
   const run = ++boardRun;
   board = null;
+  boardLoaded = !leaderboard.configured || !nickname;
+  boardTracked = false;
   overPanel.setBoard({ kind: leaderboard.configured ? 'loading' : 'unavailable' }, nickname ?? '');
   if (!nickname || !leaderboard.configured) return;
   const name = nickname;
   void leaderboard.submitAndLoad(name, game.world.score, game.world.t).then((b) => {
     if (run !== boardRun) return; // a newer run started meanwhile
     board = b;
+    boardLoaded = true;
     overPanel.setBoard(b ? { kind: 'loaded', board: b } : { kind: 'unavailable' }, name);
     syncUi();
   });
@@ -226,10 +233,14 @@ const debug = new DebugOverlay(() => {
 function flushEvents(): void {
   for (const e of game.world.drainEvents()) {
     renderer.onEvent(e);
-    if (e.type === 'charm' && e.what === 'boostStart') audio.setBoost(true);
+    if (e.type === 'charm' && e.what === 'boostStart') {
+      audio.setBoost(true);
+      track('boost');
+    }
     else if (e.type === 'charm' && e.what === 'boostEnd') audio.setBoost(false);
     if (e.type === 'lane') audio.sfxLane();
     else if (e.type === 'crash') {
+      track(scoreBucket(game.world.score));
       submitRun();
       audio.stopMusic();
       audio.sfxCrash();
@@ -239,6 +250,7 @@ function flushEvents(): void {
 }
 
 function onRunStart(): void {
+  track('run-start');
   audio.startMusic();
 }
 
@@ -297,6 +309,7 @@ btnRetry.addEventListener('click', (e) => {
 });
 btnShare.addEventListener('click', (e) => {
   if (!game.canRetry()) e.preventDefault();
+  else track('share-whatsapp');
 });
 
 // Pause automatically when the page is hidden; the player taps to resume.
@@ -334,6 +347,11 @@ function syncUi(): void {
   credit.hidden = game.phase !== 'title';
   btnName.hidden = game.phase !== 'title' || namePanel.isOpen;
   if (over) btnShare.href = shareHref();
+  // Leaderboard seen on the game-over screen (once per run): loaded, or "unavailable".
+  if (over && boardLoaded && !boardTracked) {
+    boardTracked = true;
+    track(board ? 'leaderboard-viewed' : 'leaderboard-unavailable');
+  }
   document.body.dataset.phase = game.phase;
 }
 showName();

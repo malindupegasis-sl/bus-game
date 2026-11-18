@@ -45,6 +45,12 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
   nickname's best, your entry highlighted) or "You: #27 of 54" below it, then RETRY and SHARE ON
   WHATSAPP with your rank in the message. If the leaderboard can't be reached, the game carries on
   and shows "Leaderboard unavailable". See *Leaderboard setup* below.
+- **Analytics (GoatCounter, cookie-free):** page views plus the events run-start, run-end/0-500,
+  run-end/500-1000, run-end/1000+, boost, share-whatsapp, leaderboard-viewed and
+  leaderboard-unavailable at https://busgamemalindu.goatcounter.com. No nicknames, exact scores or
+  anything typed is sent. The script loads async and the game never waits for it; if it's blocked,
+  events are dropped quietly. To exclude your own visits, open the site with `#toggle-goatcounter`.
+  Four saved queries for the Supabase SQL editor are in `supabase/analytics.sql`.
 - **Debug overlay:** tap the HUD score 5 times (FPS, music, charm and knockout status), with a
   SCREEN SHAKE on/off button for the small knockout shake (remembered on the device).
 

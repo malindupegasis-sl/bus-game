@@ -177,3 +177,11 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
   bend warning signs and milestones, older patched and cracked road.
 - Gameplay identical: the World doesn't know the route (test: same seed -> same traffic and crash).
 - Items 3.1-3.5 landed in one commit.
+
+## Analytics (GoatCounter) + Supabase queries
+- [x] G.1 GoatCounter script (count.v4.js, pinned with an integrity hash, async, cookie-free) counts page views for busgamemalindu
+- [x] G.2 Events: run-start, run-end/0-500 | 500-1000 | 1000+, boost, share-whatsapp, leaderboard-viewed (plus leaderboard-unavailable). Fixed names only: no nicknames, exact scores or typed text
+- [x] G.3 Never slows or breaks the game: sent outside the frame (setTimeout 0), try/catch everywhere, queue of 20 while the script loads, dropped after ~20 s if blocked
+- [x] G.4 supabase/analytics.sql: runs per day, unique players, average run length, score distribution (tested on a local copy)
+- [x] G.5 Tests: 5 unit tests (buckets, deferred sending, queue while loading, blocked, GoatCounter errors)
+
