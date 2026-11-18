@@ -158,7 +158,9 @@ Reference images are style-only: never copy them or commit them.
 - [x] B.6 Share text: "I'm #3 on LANKAN BUS LEGENDZ with 2,140 points! Beat me: ..." (rank and best score), falling back to "I scored 2,140 in ..." without a leaderboard
 - [x] B.7 Failure handling: offline / HTTP error / bad response / 8 s timeout -> "LEADERBOARD UNAVAILABLE"; the game never waits for it (RETRY works while it loads); not configured -> unavailable straight away
 - [x] B.8 Tests: 9 unit tests (nickname rules, SQL and game rules identical, grants, score cap vs a permanent-boost worst case, client requests/failures/timeouts, share text); 31 SQL checks on a local Postgres 16 as the anon role (`supabase/test_leaderboard.sql`); 195 browser checks in Chromium + WebKit at 390x844, 844x390, 375x667, 667x375 against a local stand-in for Supabase's API backed by the real SQL (first-launch name, refusals, can't start without a name, top 10 + highlight, "You:" line, share text, change/cancel/reload, buttons on screen and uncovered, Supabase down / hanging / not configured)
-- [ ] B.9 Deployed and checked live -> owner runs the SQL and sends the Project URL + anon key (they were still placeholders), then phone testing
+- [x] B.9 Deployed and checked live (515cf86) in Chromium + WebKit at 390x844, 844x390, 375x667, 667x375 (80 checks): first launch asks for a name, no run before it, name shown and remembered, game over shows "LEADERBOARD UNAVAILABLE" (no Supabase details yet) with the plain share text, RETRY/SHARE on screen and uncovered, RETRY works, hook read-only, no errors; rotation stress test (RETRY now checked on screen after each turn) and WebKit play checks passed
+- [ ] B.10 Owner runs supabase/leaderboard.sql and sends the Project URL + anon key (still placeholders in the request) -> put in src/leaderboard/config.ts, deploy, check live against the real project
+- **Waiting for the owner:** SQL run + URL/key, then phone testing.
 
 Notes: a run that ends within the first second is still submitted (any run length >= 0; the score cap still applies). The dev build can point at a test server via localStorage `busgame.lbDev`; production builds don't contain that code.
 
