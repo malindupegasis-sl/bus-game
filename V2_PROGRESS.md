@@ -147,7 +147,20 @@ Reference images are style-only: never copy them or commit them.
 - [x] A.4 Debug overlay lists the last 6 audio events with times (run start, boost on/off with the rate, speed-ups, playing/paused/buffering/stalled, play() refused or failed, watchdog restarts and reloads)
 - [x] A.5 Tests: 20 boosts in a row with a fake element (pitch never written, playing throughout, rate 1.35 <-> normal); watchdog recovers a pause during a boost and a frozen song after one. WebKit and Chromium dev build: 5 real boosts in a row plus a system pause mid-boost: song kept playing (time advancing) at 1.35x during and the normal rate after, preservesPitch never written, no errors
 - [x] A.6 Deployed and checked live (b68394a) in WebKit and Chromium: song plays, audio events show in the debug overlay, WebKit play checks, knockout/overlay checks, no page errors. (Boosts can't be triggered on the live site; the 5-boost test ran on the dev build.)
-- **Waiting for the owner to test on the iPhone (Chrome and Safari).** Then Stage B (shared leaderboard).
+- Owner tested Stage A on the iPhone: music survives multiple boosts.
+
+## Stage B: shared leaderboard (Supabase)
+- [x] B.1 `supabase/leaderboard.sql` (paste into the SQL editor, re-runnable): `scores` table (nickname, score, run_seconds, created_at) with RLS; anon gets SELECT on it and EXECUTE on `submit_score` / `leaderboard_top` only; no insert/update/delete grants or policies; rate-limit table and helper functions invisible to anon
+- [x] B.2 `submit_score()` (security definer, fixed search_path): re-validates the nickname (3-12, letters/numbers/single spaces, rude words), rejects impossible scores (> 500 + 250/s of run, negative, run > 2 h), rate-limits per hashed IP and per nickname (2 s gap, 30 per 10 min) plus a global cap, stores every accepted run, returns ok/reason, rank, total players and best (rank still returned when rate-limited)
+- [x] B.3 `leaderboard_top(10)`: each nickname's best only (case-insensitive), ties share a rank
+- [x] B.4 Name entry before the first run (HTML form: 16px+ input so iOS doesn't zoom, only valid characters can be typed, same rude filter as the database); remembered on the device; small "DRIVER: NAME · CHANGE NAME" under the music credit on the start screen (with cancel)
+- [x] B.5 Game over is now an HTML panel (crisp text): score, best, top 10 with own entry highlighted, "YOU: #27 OF 54" when outside the top 10, then RETRY and SHARE ON WHATSAPP; two columns in landscape; thumb buttons hidden behind it
+- [x] B.6 Share text: "I'm #3 on LANKAN BUS LEGENDZ with 2,140 points! Beat me: ..." (rank and best score), falling back to "I scored 2,140 in ..." without a leaderboard
+- [x] B.7 Failure handling: offline / HTTP error / bad response / 8 s timeout -> "LEADERBOARD UNAVAILABLE"; the game never waits for it (RETRY works while it loads); not configured -> unavailable straight away
+- [x] B.8 Tests: 9 unit tests (nickname rules, SQL and game rules identical, grants, score cap vs a permanent-boost worst case, client requests/failures/timeouts, share text); 31 SQL checks on a local Postgres 16 as the anon role (`supabase/test_leaderboard.sql`); 195 browser checks in Chromium + WebKit at 390x844, 844x390, 375x667, 667x375 against a local stand-in for Supabase's API backed by the real SQL (first-launch name, refusals, can't start without a name, top 10 + highlight, "You:" line, share text, change/cancel/reload, buttons on screen and uncovered, Supabase down / hanging / not configured)
+- [ ] B.9 Deployed and checked live -> owner runs the SQL and sends the Project URL + anon key (they were still placeholders), then phone testing
+
+Notes: a run that ends within the first second is still submitted (any run length >= 0; the score cap still applies). The dev build can point at a test server via localStorage `busgame.lbDev`; production builds don't contain that code.
 
 Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their checklist items above stay ticked as history. The Stage 3 scenery for 138 remains.
 

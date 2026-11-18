@@ -14,7 +14,7 @@ export interface InputHandlers {
   unlock(): void;
 }
 
-const isUi = (t: EventTarget | null) => t instanceof Element && !!t.closest('button, a');
+const isUi = (t: EventTarget | null) => t instanceof Element && !!t.closest('button, a, input, .panel');
 
 /**
  * Phone: the ▲ (bottom-left) and ▼ (bottom-right) buttons, or swipe up/down anywhere.
@@ -76,7 +76,7 @@ export function attachInput(h: InputHandlers, buttons: { el: HTMLElement; dir: D
     // Real buttons, links and the garage panel must keep their clicks (cancelling touchstart on a
     // phone cancels the click that follows). The thumb buttons act on pointerdown and have
     // touch-action: none, so they don't need this either way.
-    if (!(t instanceof Element && t.closest('a, button, #garage'))) e.preventDefault();
+    if (!(t instanceof Element && t.closest('a, button, input, .panel'))) e.preventDefault();
   };
   for (const type of ['touchstart', 'touchmove', 'gesturestart', 'gesturechange', 'dblclick', 'contextmenu', 'selectstart']) {
     document.addEventListener(type, block, { passive: false });
@@ -84,6 +84,8 @@ export function attachInput(h: InputHandlers, buttons: { el: HTMLElement; dir: D
   document.addEventListener('wheel', (e) => e.ctrlKey && e.preventDefault(), { passive: false });
 
   window.addEventListener('keydown', (e) => {
+    // Typing a name (or anything in a panel's form) never steers or starts the game.
+    if (e.target instanceof Element && e.target.closest('input, textarea, #name-panel')) return;
     const k = e.code;
     const handled = ['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'Space', 'Enter', 'KeyM'].includes(k);
     if (!handled) return;

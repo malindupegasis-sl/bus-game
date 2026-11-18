@@ -4,9 +4,9 @@ import { HUD_TOP } from './config';
 export interface Rect { x: number; y: number; w: number; h: number }
 
 export const UI_RECTS = {
-  retry: { x: 36, y: 76, w: 80, h: 20 },
-  share: { x: 124, y: 76, w: 100, h: 20 },
   mute: { x: 236, y: 3, w: 17, h: 13 },
+  /** "Driver: NAME · change" on the start screen, under the music credit. */
+  name: { x: 48, y: 101, w: 160, h: 11 },
 } satisfies Record<string, Rect>;
 
 

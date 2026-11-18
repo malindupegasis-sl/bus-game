@@ -10,6 +10,9 @@ import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
 import { creditFontPx, visibleArea } from './viewport';
 import { HUD, UI_RECTS, type Rect } from './ui-layout';
+import { SupabaseLeaderboard, type Board } from './leaderboard/api';
+import { loadName, saveName } from './leaderboard/nickname';
+import { NamePanel, OverPanel } from './ui/panels';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -22,6 +25,7 @@ const btnMute = $<HTMLButtonElement>('#btn-mute');
 const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
 const credit = $<HTMLParagraphElement>('#credit');
+const btnName = $<HTMLButtonElement>('#btn-name');
 credit.textContent = MUSIC_CREDIT;
 
 const renderer = new Renderer(canvas);
@@ -35,6 +39,56 @@ try {
 const game = new Game();
 const audio = new AudioManager();
 renderer.muted = audio.muted;
+
+// ------------------------------------------------------------ nickname + leaderboard
+
+const leaderboard = new SupabaseLeaderboard();
+const namePanel = new NamePanel();
+const overPanel = new OverPanel();
+let nickname: string | null = loadName();
+
+function showName(): void {
+  btnName.replaceChildren(`DRIVER: ${nickname ?? '?'} · `);
+  const u = document.createElement('u');
+  u.textContent = 'CHANGE NAME';
+  btnName.appendChild(u);
+}
+
+function askName(first: boolean): void {
+  namePanel.open(nickname, !first, (name) => {
+    if (name) {
+      nickname = name;
+      saveName(name);
+    }
+    showName();
+    syncUi();
+  });
+}
+
+/** The leaderboard for the run that just ended (null = loading or unavailable). */
+let board: Board | null = null;
+let boardRun = 0;
+
+function submitRun(): void {
+  const run = ++boardRun;
+  board = null;
+  overPanel.setBoard({ kind: leaderboard.configured ? 'loading' : 'unavailable' }, nickname ?? '');
+  if (!nickname || !leaderboard.configured) return;
+  const name = nickname;
+  void leaderboard.submitAndLoad(name, game.world.score, game.world.t).then((b) => {
+    if (run !== boardRun) return; // a newer run started meanwhile
+    board = b;
+    overPanel.setBoard(b ? { kind: 'loaded', board: b } : { kind: 'unavailable' }, name);
+    syncUi();
+  });
+}
+
+/** Share text gets the player's rank (and the best score it's for) when the leaderboard has it. */
+function shareHref(): string {
+  const me = board?.me;
+  if (me && me.rank !== null && me.best !== null) return whatsappUrl(me.best, undefined, me.rank);
+  return whatsappUrl(game.world.score);
+}
 
 // ------------------------------------------------------------ layout (rotation-safe)
 
@@ -72,6 +126,7 @@ function layout(): void {
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
   credit.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W)}px`;
+  btnName.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W) + 2}px`;
   laidOut = { w: v.w, h: v.h };
 }
 
@@ -111,8 +166,7 @@ function place(el: HTMLElement, r: Rect, grow = 0): void {
   el.style.height = `${((r.h + grow * 2) / VIEW_H) * 100}%`;
 }
 place(btnMute, UI_RECTS.mute, 6);
-place(btnRetry, UI_RECTS.retry);
-place(btnShare, UI_RECTS.share);
+place(btnName, UI_RECTS.name, 4);
 
 window.addEventListener('resize', afterRotation);
 window.addEventListener('orientationchange', afterRotation);
@@ -176,6 +230,7 @@ function flushEvents(): void {
     else if (e.type === 'charm' && e.what === 'boostEnd') audio.setBoost(false);
     if (e.type === 'lane') audio.sfxLane();
     else if (e.type === 'crash') {
+      submitRun();
       audio.stopMusic();
       audio.sfxCrash();
       if (navigator.vibrate) navigator.vibrate(120);
@@ -197,22 +252,26 @@ function toggleMute(): void {
 attachInput(
   {
     press(dir) {
+      if (namePanel.isOpen) return;
       const r = game.press(dir);
       if (r === 'start') onRunStart();
       else if (r === 'resume') audio.resumeAll();
       flushEvents();
     },
     swipe(dir) {
+      if (namePanel.isOpen) return;
       game.swipe(dir);
       flushEvents();
     },
     tap(x, y) {
       if (isOnScore(x, y)) debug.tap(performance.now());
+      if (namePanel.isOpen) return;
       const r = game.tap();
       if (r === 'start') onRunStart();
       else if (r === 'resume') audio.resumeAll();
     },
     primary() {
+      if (namePanel.isOpen) return;
       const r = game.primary();
       if (r === 'start' || r === 'retry') onRunStart();
       else if (r === 'resume') audio.resumeAll();
@@ -266,13 +325,27 @@ let lastPhase: Phase | null = null;
 
 function syncUi(): void {
   const over = game.phase === 'over';
-  btnRetry.hidden = !over;
-  btnShare.hidden = !over;
-  btnMute.hidden = game.phase === 'crashed';
+  if (over && !overPanel.visible) overPanel.show(game.world.score, game.highScore, game.newBest);
+  else if (!over && overPanel.visible) overPanel.hide();
+  const ready = game.canRetry();
+  btnRetry.disabled = !ready;
+  btnShare.setAttribute('aria-disabled', String(!ready));
+  btnMute.hidden = game.phase === 'crashed' || over;
   credit.hidden = game.phase !== 'title';
-  if (over) btnShare.href = whatsappUrl(game.world.score);
+  btnName.hidden = game.phase !== 'title' || namePanel.isOpen;
+  if (over) btnShare.href = shareHref();
   document.body.dataset.phase = game.phase;
 }
+showName();
+// First launch: ask for a name before the very first run.
+if (!nickname) askName(true);
+btnName.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (game.phase === 'title' && !namePanel.isOpen) {
+    askName(false);
+    syncUi();
+  }
+});
 
 function frame(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -333,6 +406,11 @@ const hook: Record<string, unknown> = {
     fps: debug.fps,
     audioCtx: audio.contextState,
     recoveries: audio.restarts,
+    nickname,
+    namePanel: namePanel.isOpen,
+    leaderboard: board ? { top: board.top.length, rank: board.me?.rank ?? null, total: board.me?.total ?? null, rejected: board.rejected } : null,
+    boardText: (document.querySelector('#over') as HTMLElement).innerText,
+    share: btnShare.href ? decodeURIComponent(btnShare.href.replace(/^.*\?text=/, '')) : '',
     audioLog: [...audio.log],
   }),
 };

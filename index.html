@@ -19,9 +19,8 @@
       <div id="wrap">
         <canvas id="screen" aria-label="LANKAN BUS LEGENDZ"></canvas>
         <button id="btn-mute" class="hit" type="button" aria-label="Mute" aria-pressed="false">Mute</button>
-        <button id="btn-retry" class="hit" type="button" hidden>Retry</button>
-        <a id="btn-share" class="hit" target="_blank" rel="noopener" hidden>Share on WhatsApp</a>
         <p id="credit" aria-label="Music credit"></p>
+        <button id="btn-name" type="button" hidden></button>
       </div>
       <button id="btn-up" class="ctrl" type="button" tabindex="-1" aria-label="Move up a lane">
         <svg viewBox="0 0 9 5" aria-hidden="true"><path fill="#f8b800" d="M4 0h1v1h1v1h1v1h1v1h1v1H0V4h1V3h1V2h1V1h1z" /></svg>
@@ -29,6 +28,33 @@
       <button id="btn-down" class="ctrl" type="button" tabindex="-1" aria-label="Move down a lane">
         <svg viewBox="0 0 9 5" aria-hidden="true"><path fill="#f8b800" d="M0 0h9v1H8v1H7v1H6v1H5v1H4V4H3V3H2V2H1V1H0z" /></svg>
       </button>
+      <section id="over" class="panel" hidden aria-label="Game over">
+        <div class="over-head">
+          <h2>GAME OVER</h2>
+          <p class="over-score">SCORE <b id="over-score">0</b></p>
+          <p class="over-best"><span id="over-best">BEST: 0</span> <span id="over-newbest" hidden>NEW BEST!</span></p>
+        </div>
+        <div class="over-board">
+          <h3>TOP 10</h3>
+          <ol id="board"></ol>
+          <p id="board-me" hidden></p>
+          <p id="board-status" role="status">LOADING LEADERBOARD…</p>
+        </div>
+        <div class="over-actions">
+          <button id="btn-retry" class="act act-retry" type="button">RETRY</button>
+          <a id="btn-share" class="act act-share" target="_blank" rel="noopener">SHARE ON WHATSAPP</a>
+        </div>
+      </section>
+      <form id="name-panel" class="panel" hidden novalidate aria-label="Choose your name">
+        <h2>WHAT'S YOUR NAME, DRIVER?</h2>
+        <p class="name-help">For the leaderboard. 3–12 letters, numbers and spaces.</p>
+        <input id="name-input" type="text" maxlength="12" autocomplete="nickname" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" aria-describedby="name-error" />
+        <p id="name-error" role="alert"></p>
+        <div class="name-actions">
+          <button id="name-cancel" class="act act-cancel" type="button" hidden>CANCEL</button>
+          <button id="name-ok" class="act act-retry" type="submit">LET'S GO</button>
+        </div>
+      </form>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

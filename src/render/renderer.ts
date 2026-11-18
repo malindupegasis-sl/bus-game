@@ -3,7 +3,6 @@ import {
   ROAD_TOP, VIEW_H, VIEW_W, laneY,
 } from '../config';
 import type { Game } from '../game/game';
-import { formatScore } from '../game/score';
 import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, obstacleX, type Obstacle } from '../game/obstacles';
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
@@ -11,7 +10,7 @@ import { SUE_LINES } from '../game/knockout';
 import { KnockFx, SPIN_FRAMES, TIP_FRAMES, spinFrame, tipFrame, type Wreck, type WreckKind } from './knockFx';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
-import { HUD, UI_RECTS, type Rect } from '../ui-layout';
+import { HUD, UI_RECTS } from '../ui-layout';
 import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, swearFor, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
@@ -1159,19 +1158,6 @@ export class Renderer {
     this.ctx.fillRect(0, 0, VIEW_W, HUD_TOP);
   }
 
-  private button(r: Rect, label: string, fill: string, scale: number, enabled: boolean): void {
-    const img = this.layer(`button:${label}:${fill}:${scale}:${enabled}`, r.w + 2, r.h + 2, (g) => {
-      this.rect(0, 0, r.w + 2, r.h + 2, PALETTE.K, g);
-      this.rect(1, 1, r.w, r.h, enabled ? fill : PALETTE.g, g);
-      this.rect(1, 1, r.w, 1, 'rgba(255,255,255,0.45)', g);
-      this.rect(1, r.h - 1, r.w, 2, 'rgba(0,0,0,0.35)', g);
-      const t = this.textImage(label, SCENE.text, scale, true, FONT_SMALL);
-      const th = 5 * scale;
-      g.drawImage(t, Math.round(1 + r.w / 2 - (t.width - scale) / 2), 1 + Math.round((r.h - th) / 2) - 1);
-    });
-    this.ctx.drawImage(img, r.x - 1, r.y - 1);
-  }
-
   private muteIcon(muted: boolean): void {
     const m = UI_RECTS.mute;
     const img = this.layer(`mute:${muted}`, m.w + 2, m.h + 2, (g) => {
@@ -1214,19 +1200,12 @@ export class Renderer {
         this.title('PAUSED', 24, 3);
         if (blink) this.text('TAP TO RESUME', mid, 60, SCENE.text, 2, 'center');
         break;
-      case 'over': {
+      case 'over':
+        // The score, leaderboard and buttons are an HTML panel on top (crisp text on phones).
         this.dim();
-        this.title('GAME OVER', 7, 3);
-        this.text(`SCORE ${formatScore(game.world.score)}`, mid, 34, SCENE.text, 2, 'center');
-        this.text(`BEST: ${formatScore(game.highScore)}`, mid, 51, SCENE.text, 1, 'center');
-        if (game.newBest && blink) this.text('NEW BEST!', mid, 62, PALETTE.y, 1, 'center');
-        const ok = game.canRetry();
-        this.button(UI_RECTS.retry, 'RETRY', '#e45c10', 2, ok);
-        this.button(UI_RECTS.share, 'SHARE ON WHATSAPP', '#00a844', 1, ok);
         break;
-      }
     }
-    if (game.phase !== 'crashed') this.muteIcon(this.muted);
+    if (game.phase !== 'crashed' && game.phase !== 'over') this.muteIcon(this.muted);
   }
 }
 

@@ -39,6 +39,12 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 - **Politician's convoy:** 5 SUVs in one lane after the warm-up, rarely (30 s cooldown).
 - **Rival buses** on your route: overtake one for +50.
 - **Captions** explain each thing the first time it appears in a run.
+- **Leaderboard (Supabase):** the first time the game opens it asks for a nickname (3-12 letters,
+  numbers and spaces, basic rude-word filter; remembered on the device, "change name" on the start
+  screen). Every run is submitted; the game-over screen shows the score, the top 10 (each
+  nickname's best, your entry highlighted) or "You: #27 of 54" below it, then RETRY and SHARE ON
+  WHATSAPP with your rank in the message. If the leaderboard can't be reached, the game carries on
+  and shows "Leaderboard unavailable". See *Leaderboard setup* below.
 - **Debug overlay:** tap the HUD score 5 times (FPS, music, charm and knockout status), with a
   SCREEN SHAKE on/off button for the small knockout shake (remembered on the device).
 
@@ -94,3 +100,23 @@ a perfect bot through the real game on 120 seeds for 150 seconds each, using rea
   frame.
 - **Routes:** the HUD mini-map draws from the `ROUTE` polyline in the renderer.
 - **Customisation:** add entries to `BUS_SKINS`.
+
+## Leaderboard setup (Supabase)
+
+1. In the Supabase dashboard open **SQL Editor**, paste the whole of `supabase/leaderboard.sql`
+   and press **Run**. It creates the `scores` table (Row Level Security on), grants the `anon`
+   role read access to it plus execute on `submit_score` and `leaderboard_top`, and nothing else.
+   It's safe to run again.
+2. Put the project's **Project URL** and **anon / publishable key** (Project Settings -> API) in
+   `src/leaderboard/config.ts`. Both are public by design. Never use the service_role / secret key.
+3. Push to `main`; the deploy workflow publishes it.
+
+With the two values empty the game works normally and shows "Leaderboard unavailable".
+
+How scores are checked (in the database, not the game): nickname rules and the rude-word list
+are enforced again; a score above 500 + 250 points per second of run is rejected (real play stays
+under ~200/s even with a permanent boost); each device (hashed IP) and each nickname may submit
+at most once every 2 s and 30 times per 10 minutes, with an overall cap of 1,000 per minute.
+Nicknames aren't accounts: anyone typing the same name (in any capitals) adds to that name's row.
+`supabase/test_leaderboard.sql` checks all of this against a local Postgres
+(`supabase/setup_local.sql` first).
