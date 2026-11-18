@@ -4,7 +4,7 @@
  * call submit_score() / leaderboard_top() (see supabase/leaderboard.sql).
  * NEVER put the service_role / secret key here.
  *
- * Leave them empty and the game shows "Leaderboard unavailable" and otherwise works normally.
+ * With them empty the game shows "Leaderboard unavailable" and otherwise works normally.
  */
-export const SUPABASE_URL = '';
-export const SUPABASE_ANON_KEY = '';
+export const SUPABASE_URL = 'https://ygnrgikatenkebemmstw.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_bIfch8GcVYCqbtUctIuY3Q_O8VQMGzh';
