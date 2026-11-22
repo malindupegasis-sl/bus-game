@@ -83,7 +83,7 @@ function submitRun(): void {
   overPanel.setBoard({ kind: leaderboard.configured ? 'loading' : 'unavailable' }, nickname ?? '');
   if (!nickname || !leaderboard.configured) return;
   const name = nickname;
-  void leaderboard.submitAndLoad(name, game.world.score, game.world.t).then((b) => {
+  void leaderboard.submitAndLoad(name, game.world.score, game.world.t, deviceId()).then((b) => {
     if (run !== boardRun) return; // a newer run started meanwhile
     board = b;
     boardLoaded = true;

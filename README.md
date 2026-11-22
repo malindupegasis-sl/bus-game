@@ -130,8 +130,11 @@ one-row counter that starts at the number of runs already in `scores`, plus `add
 
 How scores are checked (in the database, not the game): nickname rules and the rude-word list
 are enforced again; a score above 500 + 250 points per second of run is rejected (real play stays
-under ~200/s even with a permanent boost); each device (hashed IP) and each nickname may submit
-at most once every 2 s and 30 times per 10 minutes, with an overall cap of 1,000 per minute.
+under ~200/s even with a permanent boost). Rate limits are per device (a random id the game keeps
+on the phone): one submission every 2 s and 30 per 10 minutes, the same per nickname. Because
+device ids can be faked there's also a looser per-connection limit (300 per 10 minutes per IP,
+so players sharing a mobile network or wifi don't block each other) and an overall cap of 1,000
+per minute. Only hashes of the IP and device id are stored, for a day.
 Nicknames aren't accounts: anyone typing the same name (in any capitals) adds to that name's row.
 `supabase/test_leaderboard.sql` checks all of this against a local Postgres
 (`supabase/setup_local.sql` first).

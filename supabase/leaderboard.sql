@@ -5,8 +5,9 @@
 --   * public.scores: one row per finished run (nickname, score, run length, time). Row Level
 --     Security on; the anon role may only READ it. Nobody can insert, update or delete through the API.
 --   * public.score_rate_limits: private bookkeeping for rate limiting (no access for anon at all).
---   * public.submit_score(nickname, score, run_seconds): the ONLY way to add a score. It checks the
---     nickname, rejects impossible scores, rate-limits, saves the run, and returns the player's rank.
+--   * public.submit_score(nickname, score, run_seconds, device): the ONLY way to add a score. It checks
+--     the nickname, rejects impossible scores, rate-limits (per device, with looser per-connection
+--     and overall caps), saves the run, and returns the player's rank.
 --   * public.leaderboard_top(limit): the top players, each nickname's best score only.
 -- The game uses only the public anon key. Never put the service_role key in the game.
 
@@ -98,7 +99,11 @@ revoke all on function public.lb_rank(text) from public, anon, authenticated;
 -- Returns {"ok": true|false, "reason": null|"bad_name"|"rude_name"|"bad_run"|"impossible_score"|
 -- "rate_limited", "rank": n|null, "total": n, "best": n|null}. Rank and total are by each nickname's
 -- best score; they're filled in even when a submission is rate-limited (if the name has a score).
-create or replace function public.submit_score(p_nickname text, p_score integer, p_run_seconds numeric)
+-- p_device: the random id the game keeps on the device (32 hex characters); optional, so older
+-- copies of the game that don't send it still work (they're limited as one device per connection).
+-- The earlier 3-argument version is replaced by this one.
+drop function if exists public.submit_score(text, integer, numeric);
+create or replace function public.submit_score(p_nickname text, p_score integer, p_run_seconds numeric, p_device text default null)
 returns jsonb
 language plpgsql
 volatile
@@ -110,7 +115,8 @@ declare
   v_key text := lower(v_name);
   v_headers jsonb;
   v_ip text;
-  v_client text;
+  v_ip_key text;
+  v_dev_key text;
   v_now timestamptz := clock_timestamp();
   v_reason text := null;
 begin
@@ -131,8 +137,10 @@ begin
   end if;
 
   if v_reason is null then
-    -- Rate limits. Clients are told apart by a hash of their IP address (the IP itself is never
-    -- stored); the nickname gets the same limits, and there is an overall cap.
+    -- Rate limits, mainly per DEVICE (many players can share one IP address on mobile networks
+    -- and wifi): 1 per 2 s and 30 per 10 minutes per device, the same per nickname. Device ids
+    -- can be faked, so there's a looser per-connection backstop (300 per 10 minutes per IP) and an
+    -- overall cap (1,000 per minute). Only hashes of the IP and device id are stored, for a day.
     begin
       v_headers := nullif(current_setting('request.headers', true), '')::jsonb;
     exception when others then
@@ -144,23 +152,29 @@ begin
       v_headers ->> 'x-real-ip',
       'unknown'
     );
-    v_client := encode(sha256(convert_to('ip:' || v_ip, 'UTF8')), 'hex');
+    v_ip_key := 'ip:' || encode(sha256(convert_to('ip:' || v_ip, 'UTF8')), 'hex');
+    -- A missing or malformed device id falls back to one "device" per IP address.
+    v_dev_key := 'dev:' || encode(sha256(convert_to(
+      case when p_device ~ '^[0-9a-f]{32}$' then 'dev:' || p_device else 'nodev:' || v_ip end, 'UTF8')), 'hex');
 
     delete from public.score_rate_limits where at < v_now - interval '1 day';
 
     if exists (
          select 1 from public.score_rate_limits
-         where client_key in (v_client, 'name:' || v_key) and at > v_now - interval '2 seconds'
+         where client_key in (v_dev_key, 'name:' || v_key) and at > v_now - interval '2 seconds'
        )
        or (select count(*) from public.score_rate_limits
-           where client_key = v_client and at > v_now - interval '10 minutes') >= 30
+           where client_key = v_dev_key and at > v_now - interval '10 minutes') >= 30
        or (select count(*) from public.score_rate_limits
            where client_key = 'name:' || v_key and at > v_now - interval '10 minutes') >= 30
        or (select count(*) from public.score_rate_limits
-           where at > v_now - interval '1 minute') >= 1000 then
+           where client_key = v_ip_key and at > v_now - interval '10 minutes') >= 300
+       or (select count(*) from public.score_rate_limits
+           where client_key like 'ip:%' and at > v_now - interval '1 minute') >= 1000 then
       v_reason := 'rate_limited';
     else
-      insert into public.score_rate_limits (client_key, at) values (v_client, v_now), ('name:' || v_key, v_now);
+      insert into public.score_rate_limits (client_key, at)
+        values (v_dev_key, v_now), (v_ip_key, v_now), ('name:' || v_key, v_now);
       insert into public.scores (nickname, score, run_seconds) values (v_name, p_score, round(p_run_seconds, 2));
     end if;
   end if;
@@ -169,8 +183,8 @@ begin
 end;
 $$;
 
-revoke all on function public.submit_score(text, integer, numeric) from public, anon, authenticated;
-grant execute on function public.submit_score(text, integer, numeric) to anon, authenticated;
+revoke all on function public.submit_score(text, integer, numeric, text) from public, anon, authenticated;
+grant execute on function public.submit_score(text, integer, numeric, text) to anon, authenticated;
 
 -- ------------------------------------------------------------------ read the leaderboard
 

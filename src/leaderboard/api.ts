@@ -28,8 +28,11 @@ export interface LeaderboardClient {
   readonly configured: boolean;
   playCount(): Promise<number | null>;
   addPlay(deviceId: string): Promise<number | null>;
-  submitAndLoad(nickname: string, score: number, runSeconds: number): Promise<Board | null>;
+  submitAndLoad(nickname: string, score: number, runSeconds: number, deviceId: string): Promise<Board | null>;
 }
+
+/** Supabase answered 404: the function (with these arguments) doesn't exist there. */
+class NoSuchFunction extends Error {}
 
 type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -74,6 +77,7 @@ export class SupabaseLeaderboard implements LeaderboardClient {
       signal,
       cache: 'no-store',
     });
+    if (res.status === 404) throw new NoSuchFunction(name);
     if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
     return (await res.json()) as T;
   }
@@ -111,16 +115,21 @@ export class SupabaseLeaderboard implements LeaderboardClient {
     }
   }
 
-  async submitAndLoad(nickname: string, score: number, runSeconds: number): Promise<Board | null> {
+  async submitAndLoad(nickname: string, score: number, runSeconds: number, deviceId: string): Promise<Board | null> {
     if (!this.configured) return null;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
     try {
-      const r = await this.rpc<Record<string, unknown>>(
-        'submit_score',
-        { p_nickname: nickname, p_score: Math.max(0, Math.floor(score)), p_run_seconds: Math.round(Math.max(0, runSeconds) * 100) / 100 },
-        ctrl.signal,
-      );
+      const args = { p_nickname: nickname, p_score: Math.max(0, Math.floor(score)), p_run_seconds: Math.round(Math.max(0, runSeconds) * 100) / 100 };
+      let r: Record<string, unknown>;
+      try {
+        r = await this.rpc<Record<string, unknown>>('submit_score', { ...args, p_device: deviceId }, ctrl.signal);
+      } catch (e) {
+        // A database that still has the older submit_score (no device id) answers 404: send it
+        // the old way, so the leaderboard keeps working whichever is updated first.
+        if (!(e instanceof NoSuchFunction)) throw e;
+        r = await this.rpc<Record<string, unknown>>('submit_score', args, ctrl.signal);
+      }
       // The top list is read after the submission so the new score is in it.
       const top = await this.rpc<unknown[]>('leaderboard_top', { p_limit: TOP_N }, ctrl.signal);
       return parseBoard(r, top);

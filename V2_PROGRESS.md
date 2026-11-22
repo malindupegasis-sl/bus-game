@@ -201,4 +201,12 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] P.6 Tests: 5 unit tests (label, client calls, failures/timeouts -> hidden, SQL grants and seeding); Chromium + WebKit (30 checks): shown on opening, refreshed after 30 s, +1 per start/retry with the same device id across reloads, no calls during a run, hidden when Supabase is down, run starts at once when the +1 call fails or hangs; layout suite re-run with the counter showing (444 checks, 6 sizes x 2 engines)
 - [x] C.4 Creator credit: already live from the previous change (C.1-C.3); re-checked with the counter showing
 - Note: "returning from game over" doesn't pass through the start screen (RETRY goes straight into a run), so the count refreshes on opening the game, on coming back to the tab and every 30 s.
+- [x] P.7 Owner ran plays.sql. Checked live against the real project: anon can call play_count/add_play, direct reads/updates of play_counter and play_rate_limits refused; start screen shows the real total in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360; one real run start added exactly 1 (2,366 -> 2,367; a real player's run then made it 2,368)
+
+## Leaderboard: per-device rate limit
+- [x] L.1 `submit_score(nickname, score, run_seconds, device)`: per device 1 per 2 s and 30 per 10 min (was per IP); per nickname unchanged; looser per-connection backstop 300 per 10 min (no 2 s gap); overall 1,000/min (now counted once per submission); impossible-score check unchanged. Missing/junk device id = one device per connection. Old 3-argument function dropped; the device argument is optional so older cached copies of the game keep working
+- [x] L.2 Game sends the same device id as the play counter; if the database still has the old function (404), it retries once the old way, so the order of deploy and SQL doesn't matter
+- [x] L.3 Tests: 43 SQL checks (incl. two devices on one connection at the same moment both saved, 31st per device limited, 300 per connection with made-up ids limited, old 3-argument call, raw ids never stored, installing over the old version keeps scores and the counter); 140 unit tests; 195 leaderboard browser checks re-run against the new SQL; two browsers on one connection crashing at the same moment both saved
+- Test hygiene: an outdated "not configured" test scenario reached the real project (3 "Offline Guy" rows, a few play-counter starts); all browser suites now block *.supabase.co unless a check is meant to be real
+- [ ] L.4 Owner re-runs supabase/leaderboard.sql in Supabase
 

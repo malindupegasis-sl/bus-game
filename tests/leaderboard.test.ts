@@ -80,9 +80,9 @@ describe('leaderboard client', () => {
       calls.push({ url, init });
       return url.endsWith('submit_score') ? ok({ ok: true, reason: null, rank: 2, total: 2, best: 1200 }) : ok(TOP);
     });
-    const b = await lb.submitAndLoad('Kasun', 1200.7, 30.456);
+    const b = await lb.submitAndLoad('Kasun', 1200.7, 30.456, '0123456789abcdef0123456789abcdef');
     expect(calls.map((c) => c.url)).toEqual(['https://x.supabase.co/rest/v1/rpc/submit_score', 'https://x.supabase.co/rest/v1/rpc/leaderboard_top']);
-    expect(JSON.parse(String(calls[0].init.body))).toEqual({ p_nickname: 'Kasun', p_score: 1200, p_run_seconds: 30.46 });
+    expect(JSON.parse(String(calls[0].init.body))).toEqual({ p_nickname: 'Kasun', p_score: 1200, p_run_seconds: 30.46, p_device: '0123456789abcdef0123456789abcdef' });
     expect(JSON.parse(String(calls[1].init.body))).toEqual({ p_limit: 10 });
     const h = calls[0].init.headers as Record<string, string>;
     expect(h.apikey).toBe('anon-key-0123456789abcdef');
@@ -92,15 +92,15 @@ describe('leaderboard client', () => {
 
   it('not configured, offline, HTTP errors, junk and timeouts all mean "unavailable" (null)', async () => {
     expect(new SupabaseLeaderboard('', '').configured).toBe(false);
-    expect(await new SupabaseLeaderboard('', '').submitAndLoad('Kasun', 1, 5)).toBeNull();
+    expect(await new SupabaseLeaderboard('', '').submitAndLoad('Kasun', 1, 5, 'd')).toBeNull();
     const key = 'anon-key-0123456789abcdef';
     const url = 'https://x.supabase.co';
-    expect(await new SupabaseLeaderboard(url, key, () => Promise.reject(new TypeError('offline'))).submitAndLoad('Kasun', 1, 5)).toBeNull();
-    expect(await new SupabaseLeaderboard(url, key, () => Promise.resolve(new Response('down', { status: 503 }))).submitAndLoad('Kasun', 1, 5)).toBeNull();
-    expect(await new SupabaseLeaderboard(url, key, (u) => (u.endsWith('submit_score') ? ok({ ok: true, total: 1 }) : ok({ nope: 1 }))).submitAndLoad('Kasun', 1, 5)).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, () => Promise.reject(new TypeError('offline'))).submitAndLoad('Kasun', 1, 5, 'd')).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, () => Promise.resolve(new Response('down', { status: 503 }))).submitAndLoad('Kasun', 1, 5, 'd')).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, (u) => (u.endsWith('submit_score') ? ok({ ok: true, total: 1 }) : ok({ nope: 1 }))).submitAndLoad('Kasun', 1, 5, 'd')).toBeNull();
     const hang = (_u: string, init: RequestInit) => new Promise<Response>((_res, rej) => init.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError'))));
     const t0 = Date.now();
-    expect(await new SupabaseLeaderboard(url, key, hang, 50).submitAndLoad('Kasun', 1, 5)).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, hang, 50).submitAndLoad('Kasun', 1, 5, 'd')).toBeNull();
     expect(Date.now() - t0).toBeLessThan(1000);
   });
 
@@ -157,5 +157,35 @@ describe('play counter', () => {
     expect(P).not.toMatch(/grant (select|insert|update|delete|all)/i);
     expect(P).toMatch(/alter table public\.play_counter enable row level security/);
     expect(P).toMatch(/select 1, \(select count\(\*\) from public\.scores\)\s+on conflict \(id\) do nothing/);
+  });
+});
+
+describe('per-device leaderboard rate limit', () => {
+  it('sends the device id; falls back to the old 3-argument call if the database is not updated yet', async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const lb = new SupabaseLeaderboard('https://x.supabase.co', 'anon-key-0123456789abcdef', (u, init) => {
+      if (u.endsWith('submit_score')) {
+        const b = JSON.parse(String(init.body));
+        bodies.push(b);
+        if ('p_device' in b) return Promise.resolve(new Response('{"code":"PGRST202"}', { status: 404 }));
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, reason: null, rank: 1, total: 1, best: 5 })));
+      }
+      return Promise.resolve(new Response('[]'));
+    });
+    const b = await lb.submitAndLoad('Kasun', 5, 3, '0123456789abcdef0123456789abcdef');
+    expect(bodies).toEqual([
+      { p_nickname: 'Kasun', p_score: 5, p_run_seconds: 3, p_device: '0123456789abcdef0123456789abcdef' },
+      { p_nickname: 'Kasun', p_score: 5, p_run_seconds: 3 },
+    ]);
+    expect(b?.me).toEqual({ rank: 1, total: 1, best: 5 });
+  });
+
+  it('the SQL limits per device first, with per-connection and overall backstops, and keeps the score cap', () => {
+    expect(SQL).toMatch(/drop function if exists public\.submit_score\(text, integer, numeric\);/);
+    expect(SQL).toMatch(/grant execute on function public\.submit_score\(text, integer, numeric, text\) to anon, authenticated;/);
+    expect(SQL).toContain("client_key = v_dev_key and at > v_now - interval '10 minutes') >= 30");
+    expect(SQL).toContain("client_key = v_ip_key and at > v_now - interval '10 minutes') >= 300");
+    expect(SQL).toContain(">= 1000 then");
+    expect(SQL).toContain('p_score > 500 + 250 * p_run_seconds');
   });
 });

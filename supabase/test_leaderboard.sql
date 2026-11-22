@@ -71,13 +71,35 @@ select pg_temp.check((select string_agg(nickname || ':' || score || '#' || rank,
   from public.leaderboard_top(10)), 'leaderboard order, ties share a rank');
 select pg_temp.check((select count(*) = 2 from public.leaderboard_top(2)), 'limit respected');
 
--- Per-client 10-minute cap (30), with the 2 s gap side-stepped by back-dating earlier rows.
+-- Per-device limits (the main ones).
+select pg_temp.req('8.8.8.8');
+select pg_temp.check((select (r ->> 'ok')::boolean from public.submit_score('Phone One', 10, 10, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') r), 'device A saved');
+select pg_temp.check((select (r ->> 'ok')::boolean from public.submit_score('Phone Two', 10, 10, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb') r), 'device B on the SAME connection, same moment, also saved (shared mobile/wifi IP)');
+select pg_temp.check((select r ->> 'reason' = 'rate_limited' from public.submit_score('Phone One B', 10, 10, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa') r), 'device A again within 2 s (even under another name) rate-limited');
+-- 31st in 10 minutes from one device (earlier ones back-dated)
 reset role;
 insert into public.score_rate_limits (client_key, at)
-  select encode(sha256(convert_to('ip:7.7.7.7', 'UTF8')), 'hex'), clock_timestamp() - interval '5 minutes' from generate_series(1, 30);
+  select 'dev:' || encode(sha256(convert_to('dev:cccccccccccccccccccccccccccccccc', 'UTF8')), 'hex'), clock_timestamp() - interval '5 minutes'
+  from generate_series(1, 30);
+set role anon;
+select pg_temp.req('9.9.9.9');
+select pg_temp.check((select r ->> 'reason' = 'rate_limited' from public.submit_score('Device C', 50, 10, 'cccccccccccccccccccccccccccccccc') r), '31st submission in 10 minutes from one device rate-limited');
+select pg_temp.check((select (r ->> 'ok')::boolean from public.submit_score('Device D', 50, 10, 'dddddddddddddddddddddddddddddddd') r), '...while another device on that connection is fine');
+-- Per-connection backstop: made-up device ids from one IP stop at 300 per 10 minutes.
+reset role;
+insert into public.score_rate_limits (client_key, at)
+  select 'ip:' || encode(sha256(convert_to('ip:7.7.7.7', 'UTF8')), 'hex'), clock_timestamp() - interval '5 minutes'
+  from generate_series(1, 300);
 set role anon;
 select pg_temp.req('7.7.7.7');
-select pg_temp.check((select r ->> 'reason' = 'rate_limited' from public.submit_score('Sunil', 50, 10) r), '31st submission in 10 minutes from one IP rate-limited');
+select pg_temp.check((select r ->> 'reason' = 'rate_limited' from public.submit_score('Sunil', 50, 10, md5(random()::text)) r), 'fresh device ids past 300 per 10 minutes from one connection rate-limited');
+-- Older copies of the game (no device id) still work: one "device" per connection.
+select pg_temp.req('6.6.6.7');
+select pg_temp.check((select (r ->> 'ok')::boolean from public.submit_score('Old Client', 50, 10) r), 'old 3-argument call still works');
+select pg_temp.check((select r ->> 'reason' = 'rate_limited' from public.submit_score('Old Client 2', 50, 10, '<junk>') r), '...and a junk device id shares that per-connection device limit');
+-- Impossible-score check unchanged, also with a device id.
+select pg_temp.req('6.6.6.8');
+select pg_temp.check((select r ->> 'reason' = 'impossible_score' from public.submit_score('Cheater', 500 + 250 * 10 + 1, 10, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee') r), 'impossible score still rejected');
 
 -- Direct writes and private objects are off limits to anon.
 do $$ begin
@@ -99,5 +121,6 @@ do $$ begin
 end $$;
 select pg_temp.check((select count(*) > 0 from public.scores), 'anon can read scores');
 reset role;
-select pg_temp.check((select count(*) = 0 from public.score_rate_limits where client_key like '%.%'), 'raw IP addresses are never stored');
+select pg_temp.check((select count(*) = 0 from public.score_rate_limits where client_key like '%.%' or client_key like '%aaaaaaaa%' or client_key like '%bbbbbbbb%'), 'raw IP addresses and device ids are never stored');
+select pg_temp.check((select count(*) = 1 from pg_proc where proname = 'submit_score'), 'only one submit_score (the old 3-argument one was dropped)');
 \echo ALL SQL CHECKS PASSED
