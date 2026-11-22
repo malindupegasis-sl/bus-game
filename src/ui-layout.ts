@@ -5,8 +5,12 @@ export interface Rect { x: number; y: number; w: number; h: number }
 
 export const UI_RECTS = {
   mute: { x: 236, y: 3, w: 17, h: 13 },
-  /** "Driver: NAME · change" on the start screen, under the music credit. */
-  name: { x: 48, y: 101, w: 160, h: 11 },
+  /**
+   * Start screen, between TAP TO START (ends ~y 80) and the HUD (y 116), top to bottom: music
+   * credit (CSS, top 58%), "Driver: NAME · change", then the creator credit.
+   */
+  name: { x: 48, y: 92, w: 160, h: 9 },
+  creator: { x: 28, y: 103, w: 200, h: 8 },
 } satisfies Record<string, Rect>;
 
 

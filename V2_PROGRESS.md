@@ -186,3 +186,9 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] G.5 Tests: 5 unit tests (buckets, deferred sending, queue while loading, blocked, GoatCounter errors)
 
 - [x] G.6 Deployed (08ffa74) and checked live in Chromium (portrait) and WebKit (landscape): script loads with its integrity hash; page view, run-start, run-end/0-500, leaderboard-viewed and share-whatsapp sent; no nickname or exact score in any request; no cookies; with GoatCounter blocked the game plays normally at ~60 fps with no errors. One real run sent to busgamemalindu (2026-11-18 12:35 UTC, iPhone user agent): 5 hits, all accepted (HTTP 200). Supabase was faked in these tests (no new leaderboard rows). Owner confirms on the dashboard.
+
+## Creator credit
+- [x] C.1 "Game Created By - Malindu K" in the HUD cyan (#3cfcfc): start screen (bottom, under "change name"; music credit and change name moved up a little to make room, all above the HUD) and the game-over panel (last row, under RETRY/SHARE; left column in landscape)
+- [x] C.2 "Malindu K" links to https://www.linkedin.com/in/malindu-karu/ in a new tab (noopener); tapping it, or Enter on it, never starts/retries a run, steers or presses another button
+- [x] C.3 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (396 checks): on screen, cyan, clear of the music credit, change name, title/TAP TO START, HUD, thumb buttons, RETRY, SHARE, the leaderboard and "You:" line (with a full top 10); tap opens LinkedIn in a new tab, nothing else happens; panel still fits
+

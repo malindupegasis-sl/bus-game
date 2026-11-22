@@ -156,7 +156,7 @@ body[data-phase='crashed'] .ctrl {
   position: absolute;
   left: 0;
   right: 0;
-  top: 66%;
+  top: 58.3%;
   margin: 0;
   text-align: center;
   color: #f8d878;
@@ -235,7 +235,7 @@ body[data-phase='crashed'] .ctrl {
 #over {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'head' 'board' 'actions';
+  grid-template-areas: 'head' 'board' 'actions' 'credit';
   align-content: center;
   justify-items: center;
   row-gap: 14px;
@@ -308,8 +308,8 @@ body[data-phase='crashed'] .ctrl {
 @media (orientation: landscape) {
   #over {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    grid-template-rows: 1fr auto;
-    grid-template-areas: 'head board' 'actions board';
+    grid-template-rows: 1fr auto auto;
+    grid-template-areas: 'head board' 'actions board' 'credit board';
     column-gap: 20px;
     row-gap: 12px;
     align-items: center;
@@ -407,4 +407,48 @@ body[data-phase='over'] .ctrl {
 }
 .panel [hidden] {
   display: none !important;
+}
+
+/* "Game Created By - Malindu K": HUD cyan, small, at the bottom of the start and game-over screens. */
+.creator {
+  margin: 0;
+  color: #3cfcfc;
+  font: bold 8px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.03em;
+  text-shadow: 1px 1px 0 #000;
+  white-space: nowrap;
+  text-transform: none;
+}
+.creator[hidden],
+#creator-title[hidden] {
+  display: none; /* #creator-title sets display: flex, which would otherwise beat [hidden] */
+}
+.creator-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  touch-action: manipulation;
+}
+.creator-link:focus-visible {
+  outline: 2px solid #3cfcfc;
+  outline-offset: 2px;
+}
+#creator-title {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none; /* only the link itself is tappable */
+}
+#creator-title .creator-link {
+  pointer-events: auto;
+  padding: 2px 4px;
+}
+#creator-over {
+  grid-area: credit;
+  font-size: 12px;
+}
+#creator-over .creator-link {
+  display: inline-block;
+  padding: 4px 2px;
 }

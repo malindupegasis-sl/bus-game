@@ -86,6 +86,8 @@ export function attachInput(h: InputHandlers, buttons: { el: HTMLElement; dir: D
   window.addEventListener('keydown', (e) => {
     // Typing a name (or anything in a panel's form) never steers or starts the game.
     if (e.target instanceof Element && e.target.closest('input, textarea, #name-panel')) return;
+    // A focused link (the creator credit) keeps its own Enter/Space: open it, don't start a run.
+    if (e.target instanceof Element && e.target.closest('a[href]:not(#btn-share)')) return;
     const k = e.code;
     const handled = ['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'Space', 'Enter', 'KeyM'].includes(k);
     if (!handled) return;

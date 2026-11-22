@@ -27,6 +27,7 @@ const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
 const credit = $<HTMLParagraphElement>('#credit');
 const btnName = $<HTMLButtonElement>('#btn-name');
+const creatorTitle = $<HTMLParagraphElement>('#creator-title');
 credit.textContent = MUSIC_CREDIT;
 
 const renderer = new Renderer(canvas);
@@ -134,6 +135,7 @@ function layout(): void {
   stage.dataset.controls = l.mode;
   credit.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W)}px`;
   btnName.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W) + 2}px`;
+  creatorTitle.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W)}px`;
   laidOut = { w: v.w, h: v.h };
 }
 
@@ -173,7 +175,8 @@ function place(el: HTMLElement, r: Rect, grow = 0): void {
   el.style.height = `${((r.h + grow * 2) / VIEW_H) * 100}%`;
 }
 place(btnMute, UI_RECTS.mute, 6);
-place(btnName, UI_RECTS.name, 4);
+place(btnName, UI_RECTS.name, 1);
+place(creatorTitle, UI_RECTS.creator);
 
 window.addEventListener('resize', afterRotation);
 window.addEventListener('orientationchange', afterRotation);
@@ -346,6 +349,7 @@ function syncUi(): void {
   btnMute.hidden = game.phase === 'crashed' || over;
   credit.hidden = game.phase !== 'title';
   btnName.hidden = game.phase !== 'title' || namePanel.isOpen;
+  creatorTitle.hidden = game.phase !== 'title' || namePanel.isOpen;
   if (over) btnShare.href = shareHref();
   // Leaderboard seen on the game-over screen (once per run): loaded, or "unavailable".
   if (over && boardLoaded && !boardTracked) {
