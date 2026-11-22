@@ -116,3 +116,46 @@ describe('share text', () => {
     expect(shareText(2140, 'https://malindupegasis-sl.github.io/bus-game/')).toBe('I scored 2,140 in LANKAN BUS LEGENDZ! Beat me: https://malindupegasis-sl.github.io/bus-game/');
   });
 });
+
+describe('play counter', () => {
+  const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+  const url = 'https://x.supabase.co';
+  const key = 'anon-key-0123456789abcdef';
+
+  it('label: sentence case with commas', async () => {
+    const { playsLabel } = await import('../src/share');
+    expect(playsLabel(1234)).toBe('Played 1,234 times');
+    expect(playsLabel(1)).toBe('Played 1 time');
+    expect(playsLabel(0)).toBe('Played 0 times');
+  });
+
+  it('reads the total and adds a play through the two functions only', async () => {
+    const calls: { url: string; body: string }[] = [];
+    const lb = new SupabaseLeaderboard(url, key, (u, init) => {
+      calls.push({ url: u, body: String(init.body) });
+      return u.endsWith('play_count') ? ok(1234) : ok({ ok: true, total: 1235 });
+    });
+    expect(await lb.playCount()).toBe(1234);
+    expect(await lb.addPlay('0123456789abcdef0123456789abcdef')).toBe(1235);
+    expect(calls.map((c) => c.url)).toEqual([`${url}/rest/v1/rpc/play_count`, `${url}/rest/v1/rpc/add_play`]);
+    expect(JSON.parse(calls[1].body)).toEqual({ p_device: '0123456789abcdef0123456789abcdef' });
+  });
+
+  it('any failure means null (the line is hidden), never a throw or a 0', async () => {
+    expect(await new SupabaseLeaderboard('', '').playCount()).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, () => Promise.reject(new TypeError('offline'))).playCount()).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, () => Promise.resolve(new Response('x', { status: 503 }))).playCount()).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, () => ok('lots')).playCount()).toBeNull();
+    expect(await new SupabaseLeaderboard(url, key, () => Promise.reject(new TypeError('offline'))).addPlay('x')).toBeNull();
+    const hang = (_u: string, init: RequestInit) => new Promise<Response>((_r, rej) => init.signal?.addEventListener('abort', () => rej(new DOMException('a', 'AbortError'))));
+    expect(await new SupabaseLeaderboard(url, key, hang, 30).playCount()).toBeNull();
+  });
+
+  it('the SQL: anon can only call play_count and add_play; the counter starts from scores', () => {
+    const P = readFileSync(new URL('../supabase/plays.sql', import.meta.url), 'utf8');
+    expect([...P.matchAll(/grant execute on function (public\.\w+)/g)].map((m) => m[1])).toEqual(['public.play_count', 'public.add_play']);
+    expect(P).not.toMatch(/grant (select|insert|update|delete|all)/i);
+    expect(P).toMatch(/alter table public\.play_counter enable row level security/);
+    expect(P).toMatch(/select 1, \(select count\(\*\) from public\.scores\)\s+on conflict \(id\) do nothing/);
+  });
+});

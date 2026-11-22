@@ -192,3 +192,13 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] C.2 "Malindu K" links to https://www.linkedin.com/in/malindu-karu/ in a new tab (noopener); tapping it, or Enter on it, never starts/retries a run, steers or presses another button
 - [x] C.3 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (396 checks): on screen, cyan, clear of the music credit, change name, title/TAP TO START, HUD, thumb buttons, RETRY, SHARE, the leaderboard and "You:" line (with a full top 10); tap opens LinkedIn in a new tab, nothing else happens; panel still fits
 
+## Play counter + creator credit (second request)
+- [x] P.1 `supabase/plays.sql`: one-row `play_counter` (RLS on, no grants), seeded once from `count(*)` of `scores` and never reset on re-run; `add_play(device)` (security definer) +1 per run start, rate-limited per device (1/s, 60 per 10 min), per IP (200 per 10 min, so one network can't inflate it with made-up device ids) and overall (2,000/min); `play_count()`; anon may only execute those two. Only hashes of the IP/device id are kept, for an hour. 16 checks on local Postgres (`supabase/test_plays.sql`)
+- [x] P.2 Lowercase a-z for the 5×7 font in the same style (x-height on the capitals' baseline, g/j/p/q/y and the comma hang below the line); text images grow to fit descenders
+- [x] P.3 Start screen: "Played 1,234 times" (sentence case, commas, "Played 1 time" for 1) in the 5×7 font directly under the title; the two title lines moved up 3-4 px to make room; nothing else moved
+- [x] P.4 Run start sends +1 without waiting (never delays the run; a failure is ignored); a random 32-hex device id is kept on the device for the rate limit
+- [x] P.5 Count fetched when the start screen appears (opening the game, coming back to the tab) and every 30 s while it shows; not while playing; hidden (never 0) if it can't load
+- [x] P.6 Tests: 5 unit tests (label, client calls, failures/timeouts -> hidden, SQL grants and seeding); Chromium + WebKit (30 checks): shown on opening, refreshed after 30 s, +1 per start/retry with the same device id across reloads, no calls during a run, hidden when Supabase is down, run starts at once when the +1 call fails or hangs; layout suite re-run with the counter showing (444 checks, 6 sizes x 2 engines)
+- [x] C.4 Creator credit: already live from the previous change (C.1-C.3); re-checked with the counter showing
+- Note: "returning from game over" doesn't pass through the start screen (RETRY goes straight into a run), so the count refreshes on opening the game, on coming back to the tab and every 30 s.
+

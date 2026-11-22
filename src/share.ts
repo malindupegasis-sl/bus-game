@@ -7,6 +7,11 @@ export function shareText(score: number, url = SHARE_URL, rank: number | null = 
   return `I scored ${formatScore(score)} in ${GAME_TITLE}! Beat me: ${url}`;
 }
 
+/** "Played 1,234 times" (start screen). */
+export function playsLabel(n: number): string {
+  return n === 1 ? 'Played 1 time' : `Played ${formatScore(n)} times`;
+}
+
 export function whatsappUrl(score: number, url = SHARE_URL, rank: number | null = null): string {
   return `https://wa.me/?text=${encodeURIComponent(shareText(score, url, rank))}`;
 }

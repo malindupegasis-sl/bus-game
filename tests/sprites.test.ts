@@ -40,7 +40,8 @@ describe('sprites', () => {
   it('both fonts have consistent glyph sizes and cover everything the game prints', () => {
     for (const [font, h] of [[FONT_SMALL, 5], [FONT_BIG, 7]] as const) {
       for (const [ch, g] of Object.entries(font)) {
-        expect(g.h, ch).toBe(h);
+        // Lowercase descenders (g j p q y) and the comma hang below the baseline.
+        expect(g.h, ch).toBe(font === FONT_BIG && 'gjpqy,'.includes(ch) ? h + 2 : h);
         expect(g.bits).toHaveLength(g.w * g.h);
       }
     }
@@ -70,5 +71,18 @@ describe('sprites', () => {
     expect(TITLE_SCALE).toBeCloseTo(1.1);
     expect(Math.round((width(FONT_BIG, a, 3) + 3) * TITLE_SCALE)).toBeLessThanOrEqual(256 - 8);
     expect(MUSIC_CREDIT).toBe('Music: Nandana Sihina Gange by Sangeeth Wijesuriya');
+  });
+});
+
+describe('5×7 lowercase', () => {
+  it('a-z all present; 7 rows, or 9 for descenders; rows the same width', async () => {
+    const { FONT_BIG } = await import('../src/render/sprites');
+    for (const ch of 'abcdefghijklmnopqrstuvwxyz') {
+      const g = FONT_BIG[ch];
+      expect(g, ch).toBeDefined();
+      expect(g.h, ch).toBe('gjpqy'.includes(ch) ? 9 : 7);
+      expect(g.bits.length, ch).toBe(g.w * g.h);
+    }
+    for (const ch of 'Played 1,234 times') expect(FONT_BIG[ch], ch).toBeDefined();
   });
 });

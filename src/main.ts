@@ -5,7 +5,7 @@ import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
 import { Renderer } from './render/renderer';
-import { whatsappUrl } from './share';
+import { playsLabel, whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
 import { creditFontPx, visibleArea } from './viewport';
@@ -14,6 +14,7 @@ import { SupabaseLeaderboard, type Board } from './leaderboard/api';
 import { loadName, saveName } from './leaderboard/nickname';
 import { NamePanel, OverPanel } from './ui/panels';
 import { scoreBucket, track } from './analytics';
+import { deviceId } from './leaderboard/device';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -90,6 +91,31 @@ function submitRun(): void {
     syncUi();
   });
 }
+
+// ------------------------------------------------------------ play counter ("Played N times")
+
+/** Refresh the count this often while the start screen is showing (ms). */
+const PLAYS_REFRESH = 30_000;
+let playsLoading = false;
+let playsAt = 0;
+
+function setPlays(n: number | null): void {
+  renderer.playsText = n === null ? null : playsLabel(n);
+}
+
+/** Load the total (start screen only). A failure hides the line; nothing ever waits for this. */
+function refreshPlays(): void {
+  if (playsLoading || !leaderboard.configured) return;
+  playsLoading = true;
+  playsAt = performance.now();
+  void leaderboard.playCount().then((n) => {
+    playsLoading = false;
+    setPlays(n);
+  });
+}
+setInterval(() => {
+  if (game.phase === 'title' && document.visibilityState === 'visible' && performance.now() - playsAt >= PLAYS_REFRESH - 500) refreshPlays();
+}, 5_000);
 
 /** Share text gets the player's rank (and the best score it's for) when the leaderboard has it. */
 function shareHref(): string {
@@ -254,6 +280,8 @@ function flushEvents(): void {
 
 function onRunStart(): void {
   track('run-start');
+  // +1 on the shared counter. Not awaited: a slow or failed call never delays the run.
+  void leaderboard.addPlay(deviceId()).then((n) => n !== null && setPlays(n));
   audio.startMusic();
 }
 
@@ -320,8 +348,9 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') {
     game.pause();
     audio.suspend();
-  } else if (game.phase !== 'paused') {
-    audio.resumeAll();
+  } else {
+    if (game.phase !== 'paused') audio.resumeAll();
+    if (game.phase === 'title') refreshPlays(); // back from another tab or app
   }
 });
 window.addEventListener('pagehide', () => {
@@ -384,6 +413,7 @@ function frame(now: number): void {
   // Music follows the base difficulty speed, not the boost's extra 1.3x (chipmunk mode handles that).
   if (game.phase === 'playing') audio.setRate(musicRateForSpeed(speedAt(game.world.t)));
   if (game.phase !== lastPhase || game.phase === 'over') {
+    if (game.phase === 'title' && game.phase !== lastPhase) refreshPlays(); // start screen appeared
     lastPhase = game.phase;
     syncUi();
   }
@@ -428,6 +458,7 @@ const hook: Record<string, unknown> = {
     fps: debug.fps,
     audioCtx: audio.contextState,
     recoveries: audio.restarts,
+    plays: renderer.playsText,
     nickname,
     namePanel: namePanel.isOpen,
     leaderboard: board ? { top: board.top.length, rank: board.me?.rank ?? null, total: board.me?.total ?? null, rejected: board.rejected } : null,

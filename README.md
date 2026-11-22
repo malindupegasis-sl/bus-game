@@ -45,6 +45,9 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
   nickname's best, your entry highlighted) or "You: #27 of 54" below it, then RETRY and SHARE ON
   WHATSAPP with your rank in the message. If the leaderboard can't be reached, the game carries on
   and shows "Leaderboard unavailable". See *Leaderboard setup* below.
+- **Play counter:** "Played 1,234 times" under the title on the start screen: every run that
+  starts adds 1 (`add_play`, rate-limited per device and per network), loaded when the start
+  screen appears and every 30 s while it shows; hidden if it can't load. SQL: `supabase/plays.sql`.
 - **Creator credit:** "Game Created By - Malindu K" in the HUD cyan at the bottom of the start
   and game-over screens; the name links to LinkedIn in a new tab (it never starts, retries or steers).
 - **Analytics (GoatCounter, cookie-free):** page views plus the events run-start, run-end/0-500,
@@ -120,6 +123,10 @@ a perfect bot through the real game on 120 seeds for 150 seconds each, using rea
 3. Push to `main`; the deploy workflow publishes it.
 
 With the two values empty the game works normally and shows "Leaderboard unavailable".
+
+For the play counter, also run `supabase/plays.sql` (after `leaderboard.sql`). It creates a
+one-row counter that starts at the number of runs already in `scores`, plus `add_play(device)` and
+`play_count()`; anon can only call those two functions. Re-running it never resets the count.
 
 How scores are checked (in the database, not the game): nickname rules and the rude-word list
 are enforced again; a score above 500 + 250 points per second of run is rejected (real play stays

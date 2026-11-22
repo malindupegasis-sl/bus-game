@@ -62,6 +62,8 @@ export class Renderer {
   private textCache = new Map<string, HTMLCanvasElement>();
 
   muted = false;
+  /** "Played N times" under the start-screen title, or null to hide the line. */
+  playsText: string | null = null;
 
   constructor(canvasEl: HTMLCanvasElement) {
     canvasEl.width = VIEW_W;
@@ -199,7 +201,10 @@ export class Renderer {
     let c = this.textCache.get(key);
     if (c) return c;
     if (this.textCache.size > TEXT_CACHE_MAX) this.textCache.clear();
-    const h = (font === FONT_BIG ? 7 : 5) * scale;
+    // Descenders (g, j, p, q, y) make a line taller than the font's cap height.
+    let rows = font === FONT_BIG ? 7 : 5;
+    for (const ch of s) rows = Math.max(rows, this.glyph(font, ch).h);
+    const h = rows * scale;
     const w = this.textWidth(s, scale, font);
     const [cv, g] = canvas(w + (shadow ? scale : 0), h + (shadow ? scale : 0));
     const paint = (ox: number, oy: number, col: string) => {
@@ -1190,8 +1195,10 @@ export class Renderer {
         this.dim();
         // Title about 10% bigger than the 3x 5×7 font (cached image scaled with nearest-neighbour).
         const [l1, l2] = splitTitle(GAME_TITLE);
-        this.bigTitle(l1, 8);
-        this.bigTitle(l2, 35);
+        this.bigTitle(l1, 5);
+        this.bigTitle(l2, 31);
+        // "Played 1,234 times" just under the title (hidden until the count has loaded).
+        if (this.playsText) this.text(this.playsText, mid, 58, '#fcfcfc', 1, 'center', true, FONT_BIG);
         if (blink) this.text('TAP TO START', mid, 70, SCENE.text, 2, 'center');
         break;
       }

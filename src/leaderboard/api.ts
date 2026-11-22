@@ -26,6 +26,8 @@ export const TIMEOUT_MS = 8000;
 
 export interface LeaderboardClient {
   readonly configured: boolean;
+  playCount(): Promise<number | null>;
+  addPlay(deviceId: string): Promise<number | null>;
   submitAndLoad(nickname: string, score: number, runSeconds: number): Promise<Board | null>;
 }
 
@@ -74,6 +76,39 @@ export class SupabaseLeaderboard implements LeaderboardClient {
     });
     if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
     return (await res.json()) as T;
+  }
+
+  /** Total runs ever started ("Played N times"), or null if it can't be loaded. */
+  async playCount(): Promise<number | null> {
+    if (!this.configured) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
+    try {
+      const n = await this.rpc<unknown>('play_count', {}, ctrl.signal);
+      return typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * A run started: +1 on the shared counter. Fire and forget - never awaited by the game, never
+   * throws. Resolves to the new total, or null.
+   */
+  async addPlay(deviceId: string): Promise<number | null> {
+    if (!this.configured) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), this.timeoutMs);
+    try {
+      const r = await this.rpc<Record<string, unknown>>('add_play', { p_device: deviceId }, ctrl.signal);
+      return typeof r?.total === 'number' && Number.isFinite(r.total) ? r.total : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async submitAndLoad(nickname: string, score: number, runSeconds: number): Promise<Board | null> {
