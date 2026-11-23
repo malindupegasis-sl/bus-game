@@ -1,0 +1,29 @@
+[
+  {
+    "file": "baila-a-bus-stop-shuffle.mp3",
+    "title": "A: Bus Stop Shuffle",
+    "note": "G major. Hook leaps up to the high D and tumbles back home.",
+    "loopSamples": 3907938,
+    "sampleRate": 44100,
+    "onset": 3,
+    "seconds": 88.62
+  },
+  {
+    "file": "baila-b-kandy-express.mp3",
+    "title": "B: Kandy Express",
+    "note": "A major. Climbing arpeggio hook with a sad-happy minor bar, very sing-along.",
+    "loopSamples": 3907938,
+    "sampleRate": 44100,
+    "onset": 0,
+    "seconds": 88.62
+  },
+  {
+    "file": "baila-c-galle-road-jump.mp3",
+    "title": "C: Galle Road Jump",
+    "note": "D major. Punchy repeated-note hook, the most trashy and bouncy of the three.",
+    "loopSamples": 3907938,
+    "sampleRate": 44100,
+    "onset": 3,
+    "seconds": 88.62
+  }
+]

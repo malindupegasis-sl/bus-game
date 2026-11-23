@@ -26,6 +26,11 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # Music drafts (not part of the game): published alongside it at /bus-game/music-drafts/.
+      - name: Add music drafts preview
+        run: |
+          mkdir -p dist/music-drafts
+          cp music-drafts/index.html music-drafts/*.mp3 dist/music-drafts/
       - uses: actions/configure-pages@v5
         with:
           enablement: true
