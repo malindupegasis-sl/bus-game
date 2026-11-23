@@ -210,3 +210,8 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - Test hygiene: an outdated "not configured" test scenario reached the real project (3 "Offline Guy" rows, a few play-counter starts); all browser suites now block *.supabase.co unless a check is meant to be real
 - [ ] L.4 Owner re-runs supabase/leaderboard.sql in Supabase
 
+
+## Music drafts (not in the game)
+- [x] D.1 Three original 8-bit baila tracks (A: Bus Stop Shuffle, G major; B: Kandy Express, A major; C: Galle Road Jump, D major): 6/8 at 130 BPM, 96 bars = 88.6 s, intro / verse / chorus / verse / chorus / drum break (air horn, cowbell) / final chorus, looping straight back to the intro. Square-wave trumpet hook and brass stabs, 4-bit triangle bass, off-beat pulse strum, bit-crushed overdriven drum machine with fills at every section end. Synthesised by `music-drafts/src/compose.py` (numpy + ffmpeg)
+- [x] D.2 Preview page https://malindupegasis-sl.github.io/bus-game/music-drafts/ (not linked from the game, noindex): play/stop per track, section and bar display, sample-exact Web Audio loop (finds the real start whether or not the decoder strips the mp3 encoder delay), plays with the iPhone silent switch on (Safari 16.4+), download links
+- [x] D.3 Checked: tempo measured at 130 BPM, no gaps or clipping, loop seam smaller than a normal sample step; live page in Chromium + WebKit: all three play, loop start found to the exact sample (Chrome strips the 1,105-sample mp3 delay, WebKit doesn't), decoded loop matches the original render at both ends; game build unchanged (same bundle hash), nothing links to the drafts
