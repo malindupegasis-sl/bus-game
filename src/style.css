@@ -360,28 +360,6 @@ body[data-phase='crashed'] .ctrl {
   gap: 10px;
 }
 
-/* "Change name" on the start screen: small, under the music credit. */
-#btn-name {
-  position: absolute;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #f8d878;
-  font: bold 8px/1 ui-monospace, Menlo, Consolas, monospace;
-  text-transform: uppercase;
-  text-shadow: 1px 1px 0 #000;
-  white-space: nowrap;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-#btn-name[hidden] {
-  display: none;
-}
-#btn-name u {
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
-}
 /* The thumb buttons do nothing at game over; keep them out of the way of the panel. */
 body[data-phase='over'] .ctrl {
   visibility: hidden;
@@ -423,18 +401,19 @@ body[data-phase='over'] .ctrl {
 }
 
 /*
- * Music credit bubble (start screen, right-hand side). Spotify's rules for its icon: green only on
- * black or white, never smaller than 21px, clear space of half its height around it, no altering.
- * So: a pure black pill, the icon at 21px tall (its own aspect ratio), and 11px (> 10.5) of black
- * around the icon on every side before any edge or text.
+ * The two start-screen bubbles: driver (bottom left) and Spotify music credit (bottom right).
+ * One shared style so they match exactly. Spotify's rules for its icon: green only on black or
+ * white, never smaller than 21px, clear space of half its height around it, no altering. So: pure
+ * black pills, icons 21px tall at their own aspect ratio, and 11px (> 10.5) of black around the
+ * icon on every side before any edge or text. Positioned by main.ts (placeBubbles).
  */
-#music-bubble {
+.bubble {
   position: absolute;
   z-index: 3;
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  padding: 11px 14px 11px 11px;
+  padding: 11px 13px 11px 11px;
   gap: 11px;
   background: #000;
   border-radius: 999px;
@@ -442,23 +421,49 @@ body[data-phase='over'] .ctrl {
   color: #fff;
   font: bold 9px/1.25 ui-monospace, Menlo, Consolas, monospace;
   text-decoration: none;
+  white-space: nowrap;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-#music-bubble img {
+.bubble-icon {
   display: block;
   flex: none;
   height: 21px;
   width: auto;
 }
-#music-bubble span {
-  max-width: 23ch;
+.bubble-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
-#music-bubble[data-off='true'] {
+.bubble[data-off='true'] {
   visibility: hidden;
   pointer-events: none;
 }
-#music-bubble:focus-visible {
+.bubble:focus-visible {
   outline: 2px solid #1ed760;
   outline-offset: 2px;
+}
+/* Spotify: the credit wraps after "Gange -" onto two lines. */
+#music-text {
+  display: block;
+  max-width: 23ch;
+  white-space: normal;
+}
+/* Driver: the whole bubble is a button. Name on line 1 (shortened with … only if a long name
+   doesn't fit), "Change name" below, underlined like a link. */
+#btn-name {
+  margin: 0;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+#driver-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#change-name {
+  color: #f8d878;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

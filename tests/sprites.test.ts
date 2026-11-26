@@ -71,7 +71,9 @@ describe('sprites', () => {
     expect(x0).toBeGreaterThanOrEqual(4);
     expect(Math.abs(x0 + w / 2 - 128)).toBeLessThanOrEqual(6); // still (nearly) centred
     expect(x0 + w).toBeLessThanOrEqual(UI_RECTS.mute.x - 6 - 2); // clear of the mute tap area
-    expect(START.titleY + 7 * 2 + 2).toBeLessThan(START.counterY);
+    expect(START.title + 7 * 2 + 2).toBeLessThan(START.counter); // title (2x font + shadow) above the counter
+    expect(START.counter + 19).toBeLessThan(START.tap);
+    expect(START.tap + 12).toBe(START.groupH);
     expect(MUSIC_CREDIT).toBe('Nandana Sihina Gange - Sangeeth Wijesuriya');
   });
 });

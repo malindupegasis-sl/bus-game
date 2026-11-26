@@ -8,7 +8,7 @@ import { MUTE_GROW, Renderer } from './render/renderer';
 import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
-import { creditFontPx, visibleArea } from './viewport';
+import { visibleArea } from './viewport';
 import { HUD, START, UI_RECTS, type Rect } from './ui-layout';
 import { SupabaseLeaderboard, type Board } from './leaderboard/api';
 import { loadName, saveName } from './leaderboard/nickname';
@@ -28,6 +28,8 @@ const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
 const musicBubble = $<HTMLAnchorElement>('#music-bubble');
 const btnName = $<HTMLButtonElement>('#btn-name');
+const driverBubble = btnName; // the whole driver bubble is the "Change name" button
+const driverName = $<HTMLSpanElement>('#driver-name');
 musicBubble.href = SPOTIFY_TRACK_URL;
 $<HTMLSpanElement>('#music-text').textContent = MUSIC_CREDIT;
 musicBubble.setAttribute('aria-label', `Listen to ${MUSIC_CREDIT} on Spotify`);
@@ -52,10 +54,9 @@ const overPanel = new OverPanel();
 let nickname: string | null = loadName();
 
 function showName(): void {
-  btnName.replaceChildren(`DRIVER: ${nickname ?? '?'} · `);
-  const u = document.createElement('u');
-  u.textContent = 'CHANGE NAME';
-  btnName.appendChild(u);
+  driverName.textContent = `Driver: ${nickname ?? '?'}`;
+  btnName.setAttribute('aria-label', `${driverName.textContent}. Change name`);
+  placeBubbles();
 }
 
 function askName(first: boolean): void {
@@ -158,32 +159,52 @@ function layout(): void {
   setBox(btnUp, l.up);
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
-  btnName.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W) + 2}px`;
   lastLayout = l;
-  placeMusicBubble();
+  placeBubbles();
   laidOut = { w: v.w, h: v.h };
 }
 
 let lastLayout: ReturnType<typeof computeLayout> | null = null;
 
 /**
- * The Spotify bubble (fixed CSS size: the icon must stay at least 21px) sits on the right of the
- * start screen with its bottom just above the HUD; in landscape it moves left of the ▼ button.
+ * The two start-screen bubbles: driver bottom left, Spotify bottom right. Fixed CSS size (the
+ * Spotify icon must stay at least 21px), bottoms just above the HUD, and the SAME inset from their
+ * edges so they mirror each other; in landscape the inset grows just enough to clear the ▲/▼
+ * thumb buttons. A long driver name is shortened (…) only if the two would otherwise meet. The
+ * title group is then centred between the top of the screen and the top of the bubbles.
  */
-function placeMusicBubble(): void {
+function placeBubbles(): void {
   const l = lastLayout;
   if (!l) return;
   const s = l.canvas.w / VIEW_W;
-  const bw = musicBubble.offsetWidth;
-  const bh = musicBubble.offsetHeight;
+  const cw = l.canvas.w;
+  driverName.style.maxWidth = '';
+  const bh = Math.max(musicBubble.offsetHeight, driverBubble.offsetHeight);
   const bottom = START.bubbleBottom * s;
   const top = bottom - bh;
-  let right = START.bubbleRight * s;
-  const dx = l.down.x - l.canvas.x;
-  const dy = l.down.y - l.canvas.y;
-  if (dy < bottom && dy + l.down.h > top && dx < right) right = dx - 6;
-  musicBubble.style.left = `${Math.round(right - bw)}px`;
+  let inset = START.bubbleInset * s;
+  const gap = 6;
+  const clash = (b: { x: number; y: number; w: number; h: number }) => {
+    const y = b.y - l.canvas.y;
+    return y < bottom && y + b.h > top;
+  };
+  // Thumb buttons overlapping the bubble row (landscape): move both bubbles inwards, equally.
+  if (clash(l.up)) inset = Math.max(inset, l.up.x + l.up.w - l.canvas.x + gap);
+  if (clash(l.down)) inset = Math.max(inset, l.canvas.x + cw - l.down.x + gap);
+  const mw = musicBubble.offsetWidth;
+  // Room left for the driver bubble; shorten the name line if needed (never the Spotify credit).
+  const room = cw - 2 * inset - mw - 8;
+  if (driverBubble.offsetWidth > room) {
+    const extra = driverBubble.offsetWidth - room;
+    driverName.style.maxWidth = `${Math.max(40, driverName.offsetWidth - extra)}px`;
+  }
+  driverBubble.style.left = `${Math.round(inset)}px`;
+  driverBubble.style.top = `${Math.round(top)}px`;
+  musicBubble.style.left = `${Math.round(cw - inset - mw)}px`;
   musicBubble.style.top = `${Math.round(top)}px`;
+  // Centre the title group in the space above the bubbles (logical px).
+  const free = top / s;
+  renderer.startTop = Math.max(2, Math.round((free - START.groupH) / 2));
 }
 
 /** If the page somehow got zoomed (it shouldn't), re-apply the viewport tag to snap back to 1x. */
@@ -222,7 +243,6 @@ function place(el: HTMLElement, r: Rect, grow = 0): void {
   el.style.height = `${((r.h + grow * 2) / VIEW_H) * 100}%`;
 }
 place(btnMute, UI_RECTS.mute, MUTE_GROW);
-place(btnName, UI_RECTS.name, 1);
 
 window.addEventListener('resize', afterRotation);
 window.addEventListener('orientationchange', afterRotation);
@@ -397,7 +417,7 @@ function syncUi(): void {
   btnShare.setAttribute('aria-disabled', String(!ready));
   btnMute.hidden = game.phase === 'crashed' || over;
   musicBubble.dataset.off = String(game.phase !== 'title' || namePanel.isOpen);
-  btnName.hidden = game.phase !== 'title' || namePanel.isOpen;
+  driverBubble.dataset.off = musicBubble.dataset.off;
   if (over) btnShare.href = shareHref();
   // Leaderboard seen on the game-over screen (once per run): loaded, or "unavailable".
   if (over && boardLoaded && !boardTracked) {

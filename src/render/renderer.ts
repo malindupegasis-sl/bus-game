@@ -67,6 +67,8 @@ export class Renderer {
   private textCache = new Map<string, HTMLCanvasElement>();
 
   muted = false;
+  /** Top of the start screen's title group (logical px); main.ts centres it above the bubbles. */
+  startTop: number = START.defaultTop;
   /** Where the start screen's canvas text was last drawn (logical px), for layout checks. */
   startBoxes: Record<string, { x: number; y: number; w: number; h: number } | null> = { title: null, counter: null, tap: null };
   /** "Played N times" split-flap counter under the start-screen title (hidden until loaded). */
@@ -315,7 +317,7 @@ export class Renderer {
     const tilesW = n * FLIP_TILE.w + (n - 1) * FLIP_TILE.gap + commas * FLIP_TILE.comma;
     const width = left.width + 5 + tilesW + 5 + right.width;
     let x = Math.round((VIEW_W - width) / 2);
-    const y = START.counterY;
+    const y = this.startTop + START.counter;
     this.startBoxes.counter = { x, y, w: width, h: FLIP_TILE.h + 1 };
     const wordY = y + Math.round((FLIP_TILE.h - 7) / 2);
     this.ctx.drawImage(left, x, wordY);
@@ -1289,11 +1291,11 @@ export class Renderer {
       case 'title': {
         this.dim();
         // Title about 10% bigger than the 3x 5×7 font (cached image scaled with nearest-neighbour).
-        this.oneLineTitle(START.titleY);
+        this.oneLineTitle(this.startTop + START.title);
         this.drawPlays(now);
-        if (blink) this.text('TAP TO START', mid, START.tapY, SCENE.text, 2, 'center');
+        if (blink) this.text('TAP TO START', mid, this.startTop + START.tap, SCENE.text, 2, 'center');
         const tw = this.textWidth('TAP TO START', 2) + 2;
-        this.startBoxes.tap = { x: Math.round(mid - tw / 2), y: START.tapY, w: tw, h: 12 };
+        this.startBoxes.tap = { x: Math.round(mid - tw / 2), y: this.startTop + START.tap, w: tw, h: 12 };
         break;
       }
       case 'paused':

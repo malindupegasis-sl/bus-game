@@ -4,19 +4,28 @@ import { HUD_TOP } from './config';
 export interface Rect { x: number; y: number; w: number; h: number }
 
 /**
- * Start screen, top to bottom (logical px): title on one line (y 5-20), the "Played N times"
- * flip counter (y 27-45), TAP TO START (y 54-66), "Driver: NAME · change name" (y 72-81), then the
- * Spotify music bubble anchored right, its bottom 3px above the HUD (HUD starts at 119).
+ * Start screen (logical px). The title, the "Played N times" flip counter and TAP TO START move
+ * together as one group (offsets from the group's top; 61px tall in all), vertically centred
+ * between the top of the screen and the top of the two bottom bubbles: the driver bubble bottom
+ * left and the Spotify bubble bottom right, both with their bottoms 3px above the HUD (y 119) and
+ * the same inset from their edges.
  */
-export const START = { titleY: 5, counterY: 27, tapY: 54, bubbleBottom: 116, bubbleRight: 252 } as const;
+export const START = {
+  title: 0,
+  counter: 22,
+  tap: 49,
+  groupH: 61,
+  bubbleBottom: 116,
+  bubbleInset: 4,
+  /** Group top used until the bubbles have been measured. */
+  defaultTop: 13,
+} as const;
 
 /** Flip-counter tile size (logical px), gap between tiles and the width a thousands comma takes. */
 export const FLIP_TILE = { w: 12, h: 18, gap: 2, comma: 3 } as const;
 
 export const UI_RECTS = {
   mute: { x: 236, y: 3, w: 17, h: 13 },
-  /** "Driver: NAME · change name" on the start screen (see START). */
-  name: { x: 48, y: 72, w: 160, h: 9 },
 } satisfies Record<string, Rect>;
 
 
