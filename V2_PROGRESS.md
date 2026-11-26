@@ -239,3 +239,4 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] K.3 Same row as before, so the centred title group keeps its spacing; ticket sized for the final text so it doesn't change width while counting
 - [x] K.4 Tests: 145 unit tests (incl. 5 for the ticket counter and wording); 948 layout/tap checks in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 with "1,234,567 bus tickets issued"
 
+- [x] K.5 Deployed (c1290ca) and checked live: read-only against the real project (3,198 tickets) a first-visit phone printed 3,198 with no counting, a phone that last saw 3,193 printed 3,193 and counted up to 3,198, both remembered 3,198 (Chromium + WebKit); 948/948 layout and tap checks, rotation stress test and WebKit play checks pass
