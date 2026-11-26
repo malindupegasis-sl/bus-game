@@ -15,6 +15,7 @@ import { loadName, saveName } from './leaderboard/nickname';
 import { NamePanel, OverPanel } from './ui/panels';
 import { scoreBucket, track } from './analytics';
 import { deviceId } from './leaderboard/device';
+import { loadSeen, saveSeen } from './render/ticket';
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -108,9 +109,12 @@ function refreshPlays(appeared: boolean): void {
   playsAt = performance.now();
   void leaderboard.playCount().then((n) => {
     playsLoading = false;
-    if (n === null) renderer.plays.hide(); // can't load: hide the line, never show 0
-    else if (appeared) renderer.plays.appear(n); // start screen appeared: N-1 flips to N
-    else renderer.plays.raise(n); // 30 s refresh: flip through to a higher total
+    if (n === null) return renderer.tickets.hide(); // can't load: hide the line, never show 0
+    // Start screen appeared: the ticket prints with the total this phone saw last time and counts
+    // up to the real one (never a fake +1). 30 s refresh: count up to a higher total.
+    if (appeared) renderer.tickets.show(n, loadSeen());
+    else renderer.tickets.raise(n);
+    saveSeen(n);
   });
 }
 setInterval(() => {
@@ -497,8 +501,9 @@ const hook: Record<string, unknown> = {
     fps: debug.fps,
     audioCtx: audio.contextState,
     recoveries: audio.restarts,
-    plays: renderer.plays.final,
-    playsTiles: renderer.plays.tiles().map((t) => t.to).join(''),
+    plays: renderer.tickets.target,
+    playsShown: renderer.tickets.value,
+    ticketOut: renderer.tickets.out,
     startBoxes: { ...renderer.startBoxes },
     nickname,
     namePanel: namePanel.isOpen,

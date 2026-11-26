@@ -232,3 +232,10 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] R.4 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (948 checks): no overlaps between title, counter, TAP TO START, both bubbles, mute, thumb buttons and HUD (thumb buttons vs HUD readouts: they have always sat over the HUD panel's red ends in landscape), bubbles mirror each other (insets, tops, heights, styles, icon sizes), group centred, Spotify icon rules, taps
 
 - [x] R.5 Deployed (a7f6b11) and checked live: 948/948 layout and tap checks (Supabase faked), rotation stress test and WebKit play checks pass; read-only against the real project the counter flipped 3,194 -> 3,195 in Chromium and WebKit
+
+## Play counter: "bus tickets issued" + ticket machine
+- [x] K.1 Wording "3,195 bus tickets issued" ("1 bus ticket issued"); the split-flap tiles are gone (flipping N-1 -> N on every visit looked like the player's visit added one)
+- [x] K.2 A pixel conductor's ticket machine (18x20: grey body, bus-red stripe, green screen, light that blinks while issuing) with a cream ticket (red stripe, perforated end, dark ink) sliding out of its slot; the ticket prints with the total this phone saw last time (localStorage busgame.ticketsSeen) and then counts up to the real total; first visit or no change: no counting, never a fake +1; a higher 30 s refresh counts up on the same ticket; hidden if the count can't load; never delays a run
+- [x] K.3 Same row as before, so the centred title group keeps its spacing; ticket sized for the final text so it doesn't change width while counting
+- [x] K.4 Tests: 145 unit tests (incl. 5 for the ticket counter and wording); 948 layout/tap checks in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 with "1,234,567 bus tickets issued"
+

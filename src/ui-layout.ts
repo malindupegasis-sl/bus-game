@@ -21,8 +21,11 @@ export const START = {
   defaultTop: 13,
 } as const;
 
-/** Flip-counter tile size (logical px), gap between tiles and the width a thousands comma takes. */
-export const FLIP_TILE = { w: 12, h: 18, gap: 2, comma: 3 } as const;
+/**
+ * Ticket counter (logical px): an 18×20 ticket machine with a 13px-tall ticket (5×7 text with
+ * room for the comma's tail) coming out of a slot on its right, 4px below its top.
+ */
+export const TICKET = { machineW: 18, machineH: 20, h: 13, slotTop: 4, padL: 6, padR: 4 } as const;
 
 export const UI_RECTS = {
   mute: { x: 236, y: 3, w: 17, h: 13 },

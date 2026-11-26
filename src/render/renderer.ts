@@ -7,11 +7,12 @@ import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, 
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
 import { SUE_LINES } from '../game/knockout';
-import { FlipCounter, type Tile } from './flip';
+import { TicketCounter } from './ticket';
+import { ticketsLabel } from '../share';
 import { KnockFx, SPIN_FRAMES, TIP_FRAMES, spinFrame, tipFrame, type Wreck, type WreckKind } from './knockFx';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
-import { FLIP_TILE, HUD, START, UI_RECTS } from '../ui-layout';
+import { HUD, START, TICKET, UI_RECTS } from '../ui-layout';
 import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, swearFor, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
@@ -24,8 +25,6 @@ type Align = 'left' | 'center' | 'right';
 /** How far the mute button's tap area reaches beyond its icon (logical px; see main.ts). */
 export const MUTE_GROW = 6;
 
-/** Plain zero for the flip-counter tiles (the 5×7 font's zero is slashed). */
-const PLAIN_ZERO = { w: 5, h: 7, bits: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'].join('').split('').map((c) => c === '#') };
 
 /** Colour-cycling LED strip colours for the Dham Rajina Xpress. */
 const LED_COLORS = ['#ff2a6d', '#ffd400', '#28ff8c', '#2ad4ff', '#a64dff', '#ff7ae6'];
@@ -71,9 +70,9 @@ export class Renderer {
   startTop: number = START.defaultTop;
   /** Where the start screen's canvas text was last drawn (logical px), for layout checks. */
   startBoxes: Record<string, { x: number; y: number; w: number; h: number } | null> = { title: null, counter: null, tap: null };
-  /** "Played N times" split-flap counter under the start-screen title (hidden until loaded). */
-  readonly plays = new FlipCounter();
-  private playsNow = 0;
+  /** "3,195 bus tickets issued": the ticket-machine counter under the title (hidden until loaded). */
+  readonly tickets = new TicketCounter();
+  private ticketsNow = 0;
 
   constructor(canvasEl: HTMLCanvasElement) {
     canvasEl.width = VIEW_W;
@@ -254,88 +253,59 @@ export class Renderer {
     this.startBoxes.title = { x, y, w: img.width, h: img.height };
   }
 
-  /** One split-flap tile (12×18): charcoal card, cream 5×7 digit at 2x, split line and hinges. */
-  private flipTile(ch: string): HTMLCanvasElement {
-    return this.layer(`flipTile:${ch}`, FLIP_TILE.w, FLIP_TILE.h, (g) => {
-      const { w, h } = FLIP_TILE;
-      const half = h / 2;
+  /** Conductor's ticket machine (18×20): grey body, bus-red stripe, green screen, ticket slot on the right. */
+  private ticketMachine(lit: boolean): HTMLCanvasElement {
+    return this.layer(`ticketMachine:${lit}`, TICKET.machineW, TICKET.machineH, (g) => {
+      const { machineW: w, machineH: h } = TICKET;
       this.rect(0, 0, w, h, PALETTE.K, g);
-      this.rect(1, 1, w - 2, half - 1, '#3a3a46', g); // top card (lighter)
-      this.rect(1, half, w - 2, half - 1, '#2a2a34', g); // bottom card
-      // Digits from the 5×7 font at 2x, but with a plain (unslashed) zero: with the split line
-      // through it, the slashed zero read as "Ø".
-      const glyph = ch === '0' ? PLAIN_ZERO : FONT_BIG[ch];
-      if (glyph && ch !== ' ') {
-        g.fillStyle = '#fcfcfc';
-        for (let i = 0; i < glyph.bits.length; i++) {
-          if (glyph.bits[i]) g.fillRect(1 + (i % glyph.w) * 2, 2 + Math.floor(i / glyph.w) * 2, 2, 2);
-        }
-      }
-      this.rect(1, half - 1, w - 2, 1, '#101014', g); // the split
-      this.rect(0, half - 2, 1, 3, '#8c8c98', g); // hinges
-      this.rect(w - 1, half - 2, 1, 3, '#8c8c98', g);
+      this.rect(1, 1, w - 2, h - 2, '#5a5a66', g);
+      this.rect(1, 1, w - 2, 3, '#7a7a88', g); // top
+      this.rect(3, 5, 9, 5, PALETTE.K, g); // screen
+      this.rect(4, 6, 7, 3, lit ? '#0f4a1f' : '#0b2a14', g);
+      if (lit) for (let x = 5; x < 10; x += 2) this.rect(x, 7, 1, 1, '#58f878', g);
+      this.rect(13, 5, 2, 2, lit ? '#ff3a2a' : '#5a1a14', g); // "issuing" light
+      this.rect(1, 12, w - 2, 2, PALETTE.R, g); // bus-red stripe
+      for (const [i, c] of [[3, '#fcfcfc'], [6, PALETTE.y], [9, '#3cfcfc']] as const) this.rect(i, 16, 2, 2, c, g);
+      this.rect(w - 1, TICKET.slotTop, 1, TICKET.h, '#101014', g); // the slot the ticket comes out of
     });
   }
 
-  /** Draw one tile part-way through its flip (top flap falls, then the new bottom flap drops in). */
-  private drawFlip(t: Tile, x: number, y: number): void {
-    const { w, h } = FLIP_TILE;
-    const half = h / 2;
-    const to = this.flipTile(t.to);
-    if (t.p >= 1) {
-      this.ctx.drawImage(to, x, y);
-      return;
-    }
-    const from = this.flipTile(t.from);
-    this.ctx.drawImage(to, 0, 0, w, half, x, y, w, half); // new top, revealed behind the flap
-    this.ctx.drawImage(from, 0, half, w, half, x, y + half, w, half); // old bottom, until covered
-    if (t.p < 0.5) {
-      const fh = Math.round(half * (1 - 2 * t.p));
-      if (fh > 0) this.ctx.drawImage(from, 0, 0, w, half, x, y + half - fh, w, fh);
-    } else {
-      const fh = Math.round(half * (2 * t.p - 1));
-      if (fh > 0) {
-        this.ctx.drawImage(to, 0, half, w, half, x, y + half, w, fh);
-        this.rect(x + 1, y + half + fh - 1, w - 2, 1, '#101014'); // the flap's edge
-      }
-    }
-  }
-
-  /** "Played [1][,][2][3][4] times" with the flip tiles, centred under the title. */
-  private drawPlays(now: number): void {
-    const dt = Math.min(0.1, Math.max(0, now - this.playsNow));
-    this.playsNow = now;
-    this.plays.update(dt);
-    const tiles = this.plays.tiles();
+  /** "3,195 bus tickets issued", printed on a ticket sliding out of the machine (centred row). */
+  private drawTickets(now: number): void {
+    const dt = Math.min(0.1, Math.max(0, now - this.ticketsNow));
+    this.ticketsNow = now;
+    this.tickets.update(dt);
+    const value = this.tickets.value;
+    const target = this.tickets.target;
     this.startBoxes.counter = null;
-    if (!tiles.length) return;
-    const total = this.plays.final ?? 0;
-    const left = this.textImage('Played', '#fcfcfc', 1, true, FONT_BIG);
-    const right = this.textImage(total === 1 ? 'time' : 'times', '#fcfcfc', 1, true, FONT_BIG);
-    const n = tiles.length;
-    const commas = Math.floor((n - 1) / 3);
-    const tilesW = n * FLIP_TILE.w + (n - 1) * FLIP_TILE.gap + commas * FLIP_TILE.comma;
-    const width = left.width + 5 + tilesW + 5 + right.width;
-    let x = Math.round((VIEW_W - width) / 2);
+    if (value === null || target === null) return;
+    const { machineW: mw, machineH: mh, h: th } = TICKET;
+    // Size the ticket for the final text, so it doesn't change width while counting up.
+    const tw = TICKET.padL + this.textWidth(ticketsLabel(target), 1, FONT_BIG) + TICKET.padR;
+    const x0 = Math.round((VIEW_W - (mw + tw)) / 2);
     const y = this.startTop + START.counter;
-    this.startBoxes.counter = { x, y, w: width, h: FLIP_TILE.h + 1 };
-    const wordY = y + Math.round((FLIP_TILE.h - 7) / 2);
-    this.ctx.drawImage(left, x, wordY);
-    x += left.width + 5;
-    tiles.forEach((t, i) => {
-      this.drawFlip(t, x, y);
-      x += FLIP_TILE.w + FLIP_TILE.gap;
-      const fromRight = n - 1 - i;
-      if (fromRight > 0 && fromRight % 3 === 0) {
-        // thousands comma, hanging below the tiles' baseline
-        this.rect(x - 1, y + FLIP_TILE.h - 3, 2, 3, '#fcfcfc');
-        this.rect(x - 2, y + FLIP_TILE.h, 2, 1, '#fcfcfc');
-        x += FLIP_TILE.comma;
-      }
-    });
-    this.ctx.drawImage(right, x + 5 - FLIP_TILE.gap, wordY);
-    void now;
+    const ty = y + TICKET.slotTop;
+    this.ctx.drawImage(this.ticketMachine(this.tickets.busy && Math.floor(now * 8) % 2 === 0), x0, y);
+    const shown = Math.round(tw * this.tickets.out);
+    if (shown > 0) {
+      const slot = x0 + mw;
+      const left = slot + shown - tw; // the ticket slides out to the right, leading edge first
+      const ctx = this.ctx;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(slot, ty, shown, th);
+      ctx.clip();
+      this.rect(left, ty, tw, th, '#b89868'); // edge
+      this.rect(left, ty + 1, tw - 1, th - 2, '#f8e8c0'); // paper
+      this.rect(left, ty + 1, 3, th - 2, PALETTE.R); // red stripe
+      for (let yy = ty + 1; yy < ty + th - 1; yy += 2) this.rect(left + tw - 1, yy, 1, 1, '#f8e8c0'); // perforated end
+      ctx.drawImage(this.textImage(ticketsLabel(value), '#3a2a1a', 1, false, FONT_BIG), left + TICKET.padL, ty + 2);
+      ctx.restore();
+      this.lastFill = '';
+    }
+    this.startBoxes.counter = { x: x0, y, w: mw + tw, h: mh };
   }
+
 
   /** Title text in the 5×7 font. */
   title(s: string, y: number, scale: number, color = SCENE.title): void {
@@ -1292,7 +1262,7 @@ export class Renderer {
         this.dim();
         // Title about 10% bigger than the 3x 5×7 font (cached image scaled with nearest-neighbour).
         this.oneLineTitle(this.startTop + START.title);
-        this.drawPlays(now);
+        this.drawTickets(now);
         if (blink) this.text('TAP TO START', mid, this.startTop + START.tap, SCENE.text, 2, 'center');
         const tw = this.textWidth('TAP TO START', 2) + 2;
         this.startBoxes.tap = { x: Math.round(mid - tw / 2), y: this.startTop + START.tap, w: tw, h: 12 };
