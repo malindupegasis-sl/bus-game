@@ -48,7 +48,7 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 - **Play counter:** "Played 1,234 times" under the title on the start screen: every run that
   starts adds 1 (`add_play`, rate-limited per device and per network), loaded when the start
   screen appears and every 30 s while it shows; hidden if it can't load. SQL: `supabase/plays.sql`.
-- **Start screen:** one-line title; "3,195 bus tickets issued" (every run started by anyone, worldwide):
+- **Start screen:** one-line title; "3,195 tickets issued" (every run started by anyone, worldwide):
   a ticket slides out of a pixel conductor's ticket machine showing the total this phone saw last
   time, then counts up to the real total (never a fake +1); a higher 30 s refresh counts up too; the music credit is a small Spotify bubble (Spotify's official green icon on black,
   21px, with its required clear space) that opens the song on Spotify. "Created By - Malindu K"

@@ -59,8 +59,8 @@ describe('ticket counter', () => {
   });
 
   it('wording', () => {
-    expect(ticketsLabel(3195)).toBe('3,195 bus tickets issued');
-    expect(ticketsLabel(1)).toBe('1 bus ticket issued');
-    expect(ticketsLabel(1234567)).toBe('1,234,567 bus tickets issued');
+    expect(ticketsLabel(3195)).toBe('3,195 tickets issued');
+    expect(ticketsLabel(1)).toBe('1 ticket issued');
+    expect(ticketsLabel(1234567)).toBe('1,234,567 tickets issued');
   });
 });

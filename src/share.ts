@@ -12,9 +12,9 @@ export function playsLabel(n: number): string {
   return n === 1 ? 'Played 1 time' : `Played ${formatScore(n)} times`;
 }
 
-/** Start-screen counter: "3,195 bus tickets issued" (every run started by anyone is a ticket). */
+/** Start-screen counter: "3,195 tickets issued" (every run started by anyone is a bus ticket). */
 export function ticketsLabel(n: number): string {
-  return `${formatScore(n)} bus ${n === 1 ? 'ticket' : 'tickets'} issued`;
+  return `${formatScore(n)} ${n === 1 ? 'ticket' : 'tickets'} issued`;
 }
 
 export function whatsappUrl(score: number, url = SHARE_URL, rank: number | null = null): string {

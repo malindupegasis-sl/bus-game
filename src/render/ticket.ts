@@ -1,5 +1,5 @@
 /**
- * "3,195 bus tickets issued": the start-screen play counter as a bus ticket that slides out of a
+ * "3,195 tickets issued": the start-screen play counter as a bus ticket that slides out of a
  * conductor's ticket machine. Pure state; the renderer draws it.
  *
  * It never fakes a +1. When the start screen appears the ticket prints showing the total this

@@ -70,7 +70,7 @@ export class Renderer {
   startTop: number = START.defaultTop;
   /** Where the start screen's canvas text was last drawn (logical px), for layout checks. */
   startBoxes: Record<string, { x: number; y: number; w: number; h: number } | null> = { title: null, counter: null, tap: null };
-  /** "3,195 bus tickets issued": the ticket-machine counter under the title (hidden until loaded). */
+  /** "3,195 tickets issued": the ticket-machine counter under the title (hidden until loaded). */
   readonly tickets = new TicketCounter();
   private ticketsNow = 0;
 
@@ -270,7 +270,7 @@ export class Renderer {
     });
   }
 
-  /** "3,195 bus tickets issued", printed on a ticket sliding out of the machine (centred row). */
+  /** "3,195 tickets issued", printed on a ticket sliding out of the machine (centred row). */
   private drawTickets(now: number): void {
     const dt = Math.min(0.1, Math.max(0, now - this.ticketsNow));
     this.ticketsNow = now;
