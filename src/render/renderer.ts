@@ -7,10 +7,11 @@ import { CONVOY_GAP, CONVOY_SUVS, CONVOY_SUV_W, KINDS, isTelling, obstacleLane, 
 import { CAPTIONS, CAPTION_TIME, CONDUCTOR_SHOUTS, PROMISES, pick, type CaptionKey } from '../game/captions';
 import { BOOST_TIME, TRANSITION_TIME } from '../game/charm';
 import { SUE_LINES } from '../game/knockout';
+import { FlipCounter, type Tile } from './flip';
 import { KnockFx, SPIN_FRAMES, TIP_FRAMES, spinFrame, tipFrame, type Wreck, type WreckKind } from './knockFx';
 import { PICKUP_W, pickupDrawBox, pickupX } from '../game/pickups';
 import type { WorldEvent } from '../game/world';
-import { HUD, UI_RECTS } from '../ui-layout';
+import { FLIP_TILE, HUD, START, UI_RECTS } from '../ui-layout';
 import { bubbleRect, bubbleSize, bubbleWindow, placeBubble, swearFor, type BubbleRect, type Box } from '../game/bubble';
 import { BUS_W, busExtent, busGroups, busLimits, busPose, busWheels, frontCharmAnchor } from './busPose';
 import {
@@ -20,8 +21,12 @@ import {
 
 type Align = 'left' | 'center' | 'right';
 
-/** The start-screen title is drawn this much bigger than the 3x font. */
-export const TITLE_SCALE = 1.1;
+/** How far the mute button's tap area reaches beyond its icon (logical px; see main.ts). */
+export const MUTE_GROW = 6;
+
+/** Plain zero for the flip-counter tiles (the 5×7 font's zero is slashed). */
+const PLAIN_ZERO = { w: 5, h: 7, bits: ['.###.', '#...#', '#...#', '#...#', '#...#', '#...#', '.###.'].join('').split('').map((c) => c === '#') };
+
 /** Colour-cycling LED strip colours for the Dham Rajina Xpress. */
 const LED_COLORS = ['#ff2a6d', '#ffd400', '#28ff8c', '#2ad4ff', '#a64dff', '#ff7ae6'];
 /** Collect feedback timings (s): body glint, sparkle burst, popups. All under a second. */
@@ -62,8 +67,11 @@ export class Renderer {
   private textCache = new Map<string, HTMLCanvasElement>();
 
   muted = false;
-  /** "Played N times" under the start-screen title, or null to hide the line. */
-  playsText: string | null = null;
+  /** Where the start screen's canvas text was last drawn (logical px), for layout checks. */
+  startBoxes: Record<string, { x: number; y: number; w: number; h: number } | null> = { title: null, counter: null, tap: null };
+  /** "Played N times" split-flap counter under the start-screen title (hidden until loaded). */
+  readonly plays = new FlipCounter();
+  private playsNow = 0;
 
   constructor(canvasEl: HTMLCanvasElement) {
     canvasEl.width = VIEW_W;
@@ -235,11 +243,96 @@ export class Renderer {
   }
 
   /** Start-screen title: the 5×7 font at 3x, drawn 10% bigger. */
-  private bigTitle(s: string, y: number): void {
-    const img = this.textImage(s, SCENE.title, 3, true, FONT_BIG);
-    const w = Math.round(img.width * TITLE_SCALE);
-    const h = Math.round(img.height * TITLE_SCALE);
-    this.ctx.drawImage(img, Math.round((VIEW_W - w) / 2), y, w, h);
+  /** "LANKAN BUS LEGENDZ" on one line (5×7 font at 2x), centred and clear of the mute button. */
+  private oneLineTitle(y: number): void {
+    const img = this.textImage(GAME_TITLE, SCENE.title, 2, true, FONT_BIG);
+    // Centred, but never into the mute button's tap area (its icon plus 6px all round).
+    const x = Math.min(Math.round((VIEW_W - img.width) / 2), UI_RECTS.mute.x - MUTE_GROW - 2 - img.width);
+    this.ctx.drawImage(img, x, y);
+    this.startBoxes.title = { x, y, w: img.width, h: img.height };
+  }
+
+  /** One split-flap tile (12×18): charcoal card, cream 5×7 digit at 2x, split line and hinges. */
+  private flipTile(ch: string): HTMLCanvasElement {
+    return this.layer(`flipTile:${ch}`, FLIP_TILE.w, FLIP_TILE.h, (g) => {
+      const { w, h } = FLIP_TILE;
+      const half = h / 2;
+      this.rect(0, 0, w, h, PALETTE.K, g);
+      this.rect(1, 1, w - 2, half - 1, '#3a3a46', g); // top card (lighter)
+      this.rect(1, half, w - 2, half - 1, '#2a2a34', g); // bottom card
+      // Digits from the 5×7 font at 2x, but with a plain (unslashed) zero: with the split line
+      // through it, the slashed zero read as "Ø".
+      const glyph = ch === '0' ? PLAIN_ZERO : FONT_BIG[ch];
+      if (glyph && ch !== ' ') {
+        g.fillStyle = '#fcfcfc';
+        for (let i = 0; i < glyph.bits.length; i++) {
+          if (glyph.bits[i]) g.fillRect(1 + (i % glyph.w) * 2, 2 + Math.floor(i / glyph.w) * 2, 2, 2);
+        }
+      }
+      this.rect(1, half - 1, w - 2, 1, '#101014', g); // the split
+      this.rect(0, half - 2, 1, 3, '#8c8c98', g); // hinges
+      this.rect(w - 1, half - 2, 1, 3, '#8c8c98', g);
+    });
+  }
+
+  /** Draw one tile part-way through its flip (top flap falls, then the new bottom flap drops in). */
+  private drawFlip(t: Tile, x: number, y: number): void {
+    const { w, h } = FLIP_TILE;
+    const half = h / 2;
+    const to = this.flipTile(t.to);
+    if (t.p >= 1) {
+      this.ctx.drawImage(to, x, y);
+      return;
+    }
+    const from = this.flipTile(t.from);
+    this.ctx.drawImage(to, 0, 0, w, half, x, y, w, half); // new top, revealed behind the flap
+    this.ctx.drawImage(from, 0, half, w, half, x, y + half, w, half); // old bottom, until covered
+    if (t.p < 0.5) {
+      const fh = Math.round(half * (1 - 2 * t.p));
+      if (fh > 0) this.ctx.drawImage(from, 0, 0, w, half, x, y + half - fh, w, fh);
+    } else {
+      const fh = Math.round(half * (2 * t.p - 1));
+      if (fh > 0) {
+        this.ctx.drawImage(to, 0, half, w, half, x, y + half, w, fh);
+        this.rect(x + 1, y + half + fh - 1, w - 2, 1, '#101014'); // the flap's edge
+      }
+    }
+  }
+
+  /** "Played [1][,][2][3][4] times" with the flip tiles, centred under the title. */
+  private drawPlays(now: number): void {
+    const dt = Math.min(0.1, Math.max(0, now - this.playsNow));
+    this.playsNow = now;
+    this.plays.update(dt);
+    const tiles = this.plays.tiles();
+    this.startBoxes.counter = null;
+    if (!tiles.length) return;
+    const total = this.plays.final ?? 0;
+    const left = this.textImage('Played', '#fcfcfc', 1, true, FONT_BIG);
+    const right = this.textImage(total === 1 ? 'time' : 'times', '#fcfcfc', 1, true, FONT_BIG);
+    const n = tiles.length;
+    const commas = Math.floor((n - 1) / 3);
+    const tilesW = n * FLIP_TILE.w + (n - 1) * FLIP_TILE.gap + commas * FLIP_TILE.comma;
+    const width = left.width + 5 + tilesW + 5 + right.width;
+    let x = Math.round((VIEW_W - width) / 2);
+    const y = START.counterY;
+    this.startBoxes.counter = { x, y, w: width, h: FLIP_TILE.h + 1 };
+    const wordY = y + Math.round((FLIP_TILE.h - 7) / 2);
+    this.ctx.drawImage(left, x, wordY);
+    x += left.width + 5;
+    tiles.forEach((t, i) => {
+      this.drawFlip(t, x, y);
+      x += FLIP_TILE.w + FLIP_TILE.gap;
+      const fromRight = n - 1 - i;
+      if (fromRight > 0 && fromRight % 3 === 0) {
+        // thousands comma, hanging below the tiles' baseline
+        this.rect(x - 1, y + FLIP_TILE.h - 3, 2, 3, '#fcfcfc');
+        this.rect(x - 2, y + FLIP_TILE.h, 2, 1, '#fcfcfc');
+        x += FLIP_TILE.comma;
+      }
+    });
+    this.ctx.drawImage(right, x + 5 - FLIP_TILE.gap, wordY);
+    void now;
   }
 
   /** Title text in the 5×7 font. */
@@ -370,9 +463,11 @@ export class Renderer {
         this.rect(x, 0, 4, 1, '#101010', g);
         this.rect(x + 4, 0, 4, 1, '#f0f0f0', g);
       }
-      this.rect(0, 1, 256 + 120, 4, '#bcbcbc', g);
-      for (let x = 0; x < 256 + 120; x += 6) this.rect(x, 1, 1, 4, '#a4a4a4', g);
-      this.rect(0, 3, 256 + 120, 1, '#a4a4a4', g);
+      // Footpath fills whatever the HUD leaves (4 rows at 8px, 6 at 10px); awnings are the last 3.
+      const fp = H - 4;
+      this.rect(0, 1, 256 + 120, fp, '#bcbcbc', g);
+      for (let x = 0; x < 256 + 120; x += 6) this.rect(x, 1, 1, fp, '#a4a4a4', g);
+      for (let y = 3; y < 1 + fp; y += 3) this.rect(0, y, 256 + 120, 1, '#a4a4a4', g);
       for (let x = 10; x < 256 + 120; x += 40) {
         this.rect(x, 1, 2, 3, '#f8d800', g);
         this.rect(x, 2, 2, 1, '#101010', g);
@@ -381,7 +476,7 @@ export class Renderer {
       for (let x = 0; x < 256 + 120; x++) {
         const shop = Math.floor(x / 24);
         const col = awn[shop % awn.length];
-        this.rect(x, 5, 1, H - 5, shop % 2 && x % 2 ? '#fcfcfc' : col, g);
+        this.rect(x, H - 3, 1, 3, shop % 2 && x % 2 ? '#fcfcfc' : col, g);
       }
     });
     this.strip(bottom, 120, d, B);
@@ -1097,7 +1192,7 @@ export class Renderer {
   /** Everything in the HUD that never changes, rendered once. */
   private hudPanel(): HTMLCanvasElement {
     const top = HUD_TOP;
-    return this.layer('hudPanel2', VIEW_W, VIEW_H - top, (g) => {
+    return this.layer('hudPanel3', VIEW_W, VIEW_H - top, (g) => {
       const R = (x: number, y: number, w: number, h: number, c: string) => this.rect(x, y - top, w, h, c, g);
       R(0, top, VIEW_W, VIEW_H - top, SCENE.hud);
       R(0, top, VIEW_W, 1, PALETTE.K);
@@ -1116,17 +1211,17 @@ export class Renderer {
       box(HUD.speed);
       const label = (t: string, x: number, y: number) =>
         g.drawImage(this.textImage(t, SCENE.lcdOn, 1, false, FONT_SMALL), x, y - top);
-      label('SCORE', HUD.score.x + 3, top + 5);
-      label('HI', HUD.score.x + 3, top + 12);
+      label('SCORE', HUD.score.x + 3, top + HUD.rows.scoreLabel);
+      label('HI', HUD.score.x + 3, top + HUD.rows.hiLabel);
       const kmh = this.textImage('KM/H', SCENE.lcdOn, 1, false, FONT_SMALL);
-      g.drawImage(kmh, HUD.speed.x + HUD.speed.w - 3 - kmh.width, top + 19 - top);
+      g.drawImage(kmh, HUD.speed.x + HUD.speed.w - 3 - kmh.width, HUD.rows.kmh);
     });
   }
 
   private hud(game: Game, now: number): void {
     const w = game.world;
     this.ctx.drawImage(this.hudPanel(), 0, HUD_TOP);
-    this.text(String(Math.min(99999, game.highScore)), HUD.score.x + 3, HUD_TOP + 18, SCENE.lcdOn, 1, 'left', false);
+    this.text(String(Math.min(99999, game.highScore)), HUD.score.x + 3, HUD_TOP + HUD.rows.hiValue, SCENE.lcdOn, 1, 'left', false);
     this.lcdBig(String(Math.min(99999, w.score)).padStart(HUD.scoreDigits.n, ' '), HUD.scoreDigits.x, HUD.scoreDigits.y);
     this.charmIcon(game, now, HUD.charmIcon.x, HUD.charmIcon.y);
     const kmh = Math.round(w.crashed || game.phase === 'title' ? 0 : w.speed * KMH_PER_SPEED);
@@ -1194,12 +1289,11 @@ export class Renderer {
       case 'title': {
         this.dim();
         // Title about 10% bigger than the 3x 5×7 font (cached image scaled with nearest-neighbour).
-        const [l1, l2] = splitTitle(GAME_TITLE);
-        this.bigTitle(l1, 5);
-        this.bigTitle(l2, 31);
-        // "Played 1,234 times" just under the title (hidden until the count has loaded).
-        if (this.playsText) this.text(this.playsText, mid, 58, '#fcfcfc', 1, 'center', true, FONT_BIG);
-        if (blink) this.text('TAP TO START', mid, 70, SCENE.text, 2, 'center');
+        this.oneLineTitle(START.titleY);
+        this.drawPlays(now);
+        if (blink) this.text('TAP TO START', mid, START.tapY, SCENE.text, 2, 'center');
+        const tw = this.textWidth('TAP TO START', 2) + 2;
+        this.startBoxes.tap = { x: Math.round(mid - tw / 2), y: START.tapY, w: tw, h: 12 };
         break;
       }
       case 'paused':
@@ -1217,15 +1311,3 @@ export class Renderer {
 }
 
 /** Split a title into two lines at the space nearest the middle. */
-export function splitTitle(t: string): [string, string] {
-  const words = t.split(' ');
-  let best: [string, string] = [t, ''];
-  let bestDiff = Infinity;
-  for (let i = 1; i < words.length; i++) {
-    const a = words.slice(0, i).join(' ');
-    const b = words.slice(i).join(' ');
-    const diff = Math.abs(a.length - b.length);
-    if (diff < bestDiff) [best, bestDiff] = [[a, b], diff];
-  }
-  return best;
-}

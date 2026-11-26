@@ -1,15 +1,15 @@
 import './style.css';
 import { AudioManager } from './audio/audio';
-import { MUSIC_CREDIT, VIEW_H, VIEW_W } from './config';
+import { MUSIC_CREDIT, SPOTIFY_TRACK_URL, VIEW_H, VIEW_W } from './config';
 import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
-import { Renderer } from './render/renderer';
-import { playsLabel, whatsappUrl } from './share';
+import { MUTE_GROW, Renderer } from './render/renderer';
+import { whatsappUrl } from './share';
 import { computeLayout, type Box } from './layout';
 import { DebugOverlay } from './debug';
 import { creditFontPx, visibleArea } from './viewport';
-import { HUD, UI_RECTS, type Rect } from './ui-layout';
+import { HUD, START, UI_RECTS, type Rect } from './ui-layout';
 import { SupabaseLeaderboard, type Board } from './leaderboard/api';
 import { loadName, saveName } from './leaderboard/nickname';
 import { NamePanel, OverPanel } from './ui/panels';
@@ -26,10 +26,11 @@ const btnDown = $<HTMLButtonElement>('#btn-down');
 const btnMute = $<HTMLButtonElement>('#btn-mute');
 const btnRetry = $<HTMLButtonElement>('#btn-retry');
 const btnShare = $<HTMLAnchorElement>('#btn-share');
-const credit = $<HTMLParagraphElement>('#credit');
+const musicBubble = $<HTMLAnchorElement>('#music-bubble');
 const btnName = $<HTMLButtonElement>('#btn-name');
-const creatorTitle = $<HTMLParagraphElement>('#creator-title');
-credit.textContent = MUSIC_CREDIT;
+musicBubble.href = SPOTIFY_TRACK_URL;
+$<HTMLSpanElement>('#music-text').textContent = MUSIC_CREDIT;
+musicBubble.setAttribute('aria-label', `Listen to ${MUSIC_CREDIT} on Spotify`);
 
 const renderer = new Renderer(canvas);
 /** Knockout screen shake on/off (set in the debug overlay, remembered on this device). */
@@ -99,22 +100,20 @@ const PLAYS_REFRESH = 30_000;
 let playsLoading = false;
 let playsAt = 0;
 
-function setPlays(n: number | null): void {
-  renderer.playsText = n === null ? null : playsLabel(n);
-}
-
 /** Load the total (start screen only). A failure hides the line; nothing ever waits for this. */
-function refreshPlays(): void {
+function refreshPlays(appeared: boolean): void {
   if (playsLoading || !leaderboard.configured) return;
   playsLoading = true;
   playsAt = performance.now();
   void leaderboard.playCount().then((n) => {
     playsLoading = false;
-    setPlays(n);
+    if (n === null) renderer.plays.hide(); // can't load: hide the line, never show 0
+    else if (appeared) renderer.plays.appear(n); // start screen appeared: N-1 flips to N
+    else renderer.plays.raise(n); // 30 s refresh: flip through to a higher total
   });
 }
 setInterval(() => {
-  if (game.phase === 'title' && document.visibilityState === 'visible' && performance.now() - playsAt >= PLAYS_REFRESH - 500) refreshPlays();
+  if (game.phase === 'title' && document.visibilityState === 'visible' && performance.now() - playsAt >= PLAYS_REFRESH - 500) refreshPlays(false);
 }, 5_000);
 
 /** Share text gets the player's rank (and the best score it's for) when the leaderboard has it. */
@@ -159,10 +158,32 @@ function layout(): void {
   setBox(btnUp, l.up);
   setBox(btnDown, l.down);
   stage.dataset.controls = l.mode;
-  credit.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W)}px`;
   btnName.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W) + 2}px`;
-  creatorTitle.style.fontSize = `${creditFontPx(l.canvas.w / VIEW_W)}px`;
+  lastLayout = l;
+  placeMusicBubble();
   laidOut = { w: v.w, h: v.h };
+}
+
+let lastLayout: ReturnType<typeof computeLayout> | null = null;
+
+/**
+ * The Spotify bubble (fixed CSS size: the icon must stay at least 21px) sits on the right of the
+ * start screen with its bottom just above the HUD; in landscape it moves left of the ▼ button.
+ */
+function placeMusicBubble(): void {
+  const l = lastLayout;
+  if (!l) return;
+  const s = l.canvas.w / VIEW_W;
+  const bw = musicBubble.offsetWidth;
+  const bh = musicBubble.offsetHeight;
+  const bottom = START.bubbleBottom * s;
+  const top = bottom - bh;
+  let right = START.bubbleRight * s;
+  const dx = l.down.x - l.canvas.x;
+  const dy = l.down.y - l.canvas.y;
+  if (dy < bottom && dy + l.down.h > top && dx < right) right = dx - 6;
+  musicBubble.style.left = `${Math.round(right - bw)}px`;
+  musicBubble.style.top = `${Math.round(top)}px`;
 }
 
 /** If the page somehow got zoomed (it shouldn't), re-apply the viewport tag to snap back to 1x. */
@@ -200,9 +221,8 @@ function place(el: HTMLElement, r: Rect, grow = 0): void {
   el.style.width = `${((r.w + grow * 2) / VIEW_W) * 100}%`;
   el.style.height = `${((r.h + grow * 2) / VIEW_H) * 100}%`;
 }
-place(btnMute, UI_RECTS.mute, 6);
+place(btnMute, UI_RECTS.mute, MUTE_GROW);
 place(btnName, UI_RECTS.name, 1);
-place(creatorTitle, UI_RECTS.creator);
 
 window.addEventListener('resize', afterRotation);
 window.addEventListener('orientationchange', afterRotation);
@@ -281,7 +301,7 @@ function flushEvents(): void {
 function onRunStart(): void {
   track('run-start');
   // +1 on the shared counter. Not awaited: a slow or failed call never delays the run.
-  void leaderboard.addPlay(deviceId()).then((n) => n !== null && setPlays(n));
+  void leaderboard.addPlay(deviceId());
   audio.startMusic();
 }
 
@@ -350,7 +370,7 @@ document.addEventListener('visibilitychange', () => {
     audio.suspend();
   } else {
     if (game.phase !== 'paused') audio.resumeAll();
-    if (game.phase === 'title') refreshPlays(); // back from another tab or app
+    if (game.phase === 'title') refreshPlays(true); // back from another tab or app: the start screen appears again
   }
 });
 window.addEventListener('pagehide', () => {
@@ -376,9 +396,8 @@ function syncUi(): void {
   btnRetry.disabled = !ready;
   btnShare.setAttribute('aria-disabled', String(!ready));
   btnMute.hidden = game.phase === 'crashed' || over;
-  credit.hidden = game.phase !== 'title';
+  musicBubble.dataset.off = String(game.phase !== 'title' || namePanel.isOpen);
   btnName.hidden = game.phase !== 'title' || namePanel.isOpen;
-  creatorTitle.hidden = game.phase !== 'title' || namePanel.isOpen;
   if (over) btnShare.href = shareHref();
   // Leaderboard seen on the game-over screen (once per run): loaded, or "unavailable".
   if (over && boardLoaded && !boardTracked) {
@@ -413,7 +432,7 @@ function frame(now: number): void {
   // Music follows the base difficulty speed, not the boost's extra 1.3x (chipmunk mode handles that).
   if (game.phase === 'playing') audio.setRate(musicRateForSpeed(speedAt(game.world.t)));
   if (game.phase !== lastPhase || game.phase === 'over') {
-    if (game.phase === 'title' && game.phase !== lastPhase) refreshPlays(); // start screen appeared
+    if (game.phase === 'title' && game.phase !== lastPhase) refreshPlays(true); // start screen appeared
     lastPhase = game.phase;
     syncUi();
   }
@@ -458,7 +477,9 @@ const hook: Record<string, unknown> = {
     fps: debug.fps,
     audioCtx: audio.contextState,
     recoveries: audio.restarts,
-    plays: renderer.playsText,
+    plays: renderer.plays.final,
+    playsTiles: renderer.plays.tiles().map((t) => t.to).join(''),
+    startBoxes: { ...renderer.startBoxes },
     nickname,
     namePanel: namePanel.isOpen,
     leaderboard: board ? { top: board.top.length, rank: board.me?.rank ?? null, total: board.me?.total ?? null, rejected: board.rejected } : null,
@@ -467,5 +488,5 @@ const hook: Record<string, unknown> = {
     audioLog: [...audio.log],
   }),
 };
-if (import.meta.env.DEV) Object.assign(hook, { game, audio });
+if (import.meta.env.DEV) Object.assign(hook, { game, audio, renderer });
 (window as unknown as { __busGame: unknown }).__busGame = Object.freeze(hook);

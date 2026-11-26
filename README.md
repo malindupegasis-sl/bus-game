@@ -48,8 +48,11 @@ Every push to `main` runs the tests, builds, and deploys to GitHub Pages
 - **Play counter:** "Played 1,234 times" under the title on the start screen: every run that
   starts adds 1 (`add_play`, rate-limited per device and per network), loaded when the start
   screen appears and every 30 s while it shows; hidden if it can't load. SQL: `supabase/plays.sql`.
-- **Creator credit:** "Game Created By - Malindu K" in the HUD cyan at the bottom of the start
-  and game-over screens; the name links to LinkedIn in a new tab (it never starts, retries or steers).
+- **Start screen:** one-line title; "Played 1,234 times" as a split-flap counter (it flips from
+  N-1 to N whenever the start screen appears, and flips through to a higher total on the 30 s
+  refresh); the music credit is a small Spotify bubble (Spotify's official green icon on black,
+  21px, with its required clear space) that opens the song on Spotify. "Created By - Malindu K"
+  (LinkedIn link) is on the game-over screen only.
 - **Analytics (GoatCounter, cookie-free):** page views plus the events run-start, run-end/0-500,
   run-end/500-1000, run-end/1000+, boost, share-whatsapp, leaderboard-viewed and
   leaderboard-unavailable at https://busgamemalindu.goatcounter.com. No nicknames, exact scores or

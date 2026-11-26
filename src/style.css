@@ -151,25 +151,6 @@ body[data-phase='crashed'] .ctrl {
 }
 
 
-/* Music credit on the start screen (HTML so it can be small but crisp) */
-#credit {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 58.3%;
-  margin: 0;
-  text-align: center;
-  color: #f8d878;
-  font: bold 8px/1.2 ui-monospace, Menlo, Consolas, monospace;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  text-shadow: 1px 1px 0 #000;
-  white-space: nowrap;
-  pointer-events: none;
-}
-#credit[hidden] {
-  display: none;
-}
 
 /* ---------------------------------------------------------------- name + game-over panels */
 .panel {
@@ -419,9 +400,8 @@ body[data-phase='over'] .ctrl {
   white-space: nowrap;
   text-transform: none;
 }
-.creator[hidden],
-#creator-title[hidden] {
-  display: none; /* #creator-title sets display: flex, which would otherwise beat [hidden] */
+.creator[hidden] {
+  display: none;
 }
 .creator-link {
   color: inherit;
@@ -433,17 +413,6 @@ body[data-phase='over'] .ctrl {
   outline: 2px solid #3cfcfc;
   outline-offset: 2px;
 }
-#creator-title {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none; /* only the link itself is tappable */
-}
-#creator-title .creator-link {
-  pointer-events: auto;
-  padding: 2px 4px;
-}
 #creator-over {
   grid-area: credit;
   font-size: 12px;
@@ -451,4 +420,45 @@ body[data-phase='over'] .ctrl {
 #creator-over .creator-link {
   display: inline-block;
   padding: 4px 2px;
+}
+
+/*
+ * Music credit bubble (start screen, right-hand side). Spotify's rules for its icon: green only on
+ * black or white, never smaller than 21px, clear space of half its height around it, no altering.
+ * So: a pure black pill, the icon at 21px tall (its own aspect ratio), and 11px (> 10.5) of black
+ * around the icon on every side before any edge or text.
+ */
+#music-bubble {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 11px 14px 11px 11px;
+  gap: 11px;
+  background: #000;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font: bold 9px/1.25 ui-monospace, Menlo, Consolas, monospace;
+  text-decoration: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#music-bubble img {
+  display: block;
+  flex: none;
+  height: 21px;
+  width: auto;
+}
+#music-bubble span {
+  max-width: 23ch;
+}
+#music-bubble[data-off='true'] {
+  visibility: hidden;
+  pointer-events: none;
+}
+#music-bubble:focus-visible {
+  outline: 2px solid #1ed760;
+  outline-offset: 2px;
 }

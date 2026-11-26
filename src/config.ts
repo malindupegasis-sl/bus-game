@@ -4,14 +4,15 @@ export const VIEW_H = 144;
 
 /**
  * Road geometry (logical pixels). Lanes are 33px so the 32px-tall bus fits inside one; the HUD
- * is 28px and the roadside strips are thin to make room.
+ * is 25px (it was 28: the 3 rows went to the play area, so lanes and hitboxes are unchanged) and
+ * the roadside strips are thin to make room.
  */
 export const LANE_COUNT = 3;
 export const LANE_HEIGHT = 33;
-export const ROAD_TOP = 9;
-export const LANE_CENTER_Y = [25, 58, 91] as const;
-export const ROAD_BOTTOM = ROAD_TOP + LANE_HEIGHT * LANE_COUNT; // 108
-export const HUD_TOP = 116;
+export const ROAD_TOP = 10;
+export const LANE_CENTER_Y = [26, 59, 92] as const;
+export const ROAD_BOTTOM = ROAD_TOP + LANE_HEIGHT * LANE_COUNT; // 109
+export const HUD_TOP = 119;
 /** Vehicles are drawn with their bottom pixel row here, relative to the lane centre. */
 export const VEHICLE_BASELINE = 15;
 /** A lane's rows run from laneY − LANE_HALF_UP to laneY + LANE_HALF_DOWN (33 rows). */
@@ -32,7 +33,8 @@ export const DISTANCE_PER_POINT = 8;
 export const KMH_PER_SPEED = 0.42;
 
 export const GAME_TITLE = 'LANKAN BUS LEGENDZ';
-export const MUSIC_CREDIT = 'Music: Nandana Sihina Gange by Sangeeth Wijesuriya';
+export const MUSIC_CREDIT = 'Nandana Sihina Gange - Sangeeth Wijesuriya';
+export const SPOTIFY_TRACK_URL = 'https://open.spotify.com/track/6RfVijJg41SYRH30EJGKhG';
 export const SHARE_URL = 'https://malindupegasis-sl.github.io/bus-game/';
 
 /**
