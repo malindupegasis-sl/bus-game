@@ -231,3 +231,4 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] R.3 Landscape: both bubbles move inwards by the same amount to clear the ▲/▼ buttons, staying symmetrical
 - [x] R.4 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (948 checks): no overlaps between title, counter, TAP TO START, both bubbles, mute, thumb buttons and HUD (thumb buttons vs HUD readouts: they have always sat over the HUD panel's red ends in landscape), bubbles mirror each other (insets, tops, heights, styles, icon sizes), group centred, Spotify icon rules, taps
 
+- [x] R.5 Deployed (a7f6b11) and checked live: 948/948 layout and tap checks (Supabase faked), rotation stress test and WebKit play checks pass; read-only against the real project the counter flipped 3,194 -> 3,195 in Chromium and WebKit
