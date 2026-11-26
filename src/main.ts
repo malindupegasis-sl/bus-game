@@ -1,6 +1,6 @@
 import './style.css';
 import { AudioManager } from './audio/audio';
-import { MUSIC_CREDIT, SPOTIFY_TRACK_URL, VIEW_H, VIEW_W } from './config';
+import { HUD_TOP, MUSIC_CREDIT, SPOTIFY_TRACK_URL, VIEW_H, VIEW_W } from './config';
 import { musicRateForSpeed, speedAt } from './game/difficulty';
 import { Game, type Phase } from './game/game';
 import { attachInput } from './input';
@@ -32,7 +32,12 @@ const btnName = $<HTMLButtonElement>('#btn-name');
 const driverBubble = btnName; // the whole driver bubble is the "Change name" button
 const driverName = $<HTMLSpanElement>('#driver-name');
 musicBubble.href = SPOTIFY_TRACK_URL;
-$<HTMLSpanElement>('#music-text').textContent = MUSIC_CREDIT;
+// Two lines, split after the dash: "Nandana Sihina Gange -" / "Sangeeth Wijesuriya".
+{
+  const cut = MUSIC_CREDIT.indexOf(' - ');
+  const lines = cut > 0 ? [MUSIC_CREDIT.slice(0, cut + 2), MUSIC_CREDIT.slice(cut + 3)] : [MUSIC_CREDIT];
+  $<HTMLSpanElement>('#music-text').replaceChildren(...lines.map((t) => Object.assign(document.createElement('span'), { textContent: t })));
+}
 musicBubble.setAttribute('aria-label', `Listen to ${MUSIC_CREDIT} on Spotify`);
 
 const renderer = new Renderer(canvas);
@@ -171,43 +176,67 @@ function layout(): void {
 let lastLayout: ReturnType<typeof computeLayout> | null = null;
 
 /**
- * The two start-screen bubbles: driver bottom left, Spotify bottom right. Fixed CSS size (the
- * Spotify icon must stay at least 21px), bottoms just above the HUD, and the SAME inset from their
- * edges so they mirror each other; in landscape the inset grows just enough to clear the ▲/▼
- * thumb buttons. A long driver name is shortened (…) only if the two would otherwise meet. The
- * title group is then centred between the top of the screen and the top of the bubbles.
+ * The two start-screen bubbles: driver on the left, Spotify on the right, always mirrored (same
+ * size rules, same distance from their side). Sizes scale with the game (--k): 32px tall on a
+ * 390px-wide portrait phone, bigger in landscape, never smaller (the Spotify icon stays >= 21px).
+ *  - Portrait: below the game frame, centred in the empty strip above the ▲/▼ buttons, their
+ *    outer edges lined up with the buttons' outer edges.
+ *  - Landscape: in the game's bottom corners just above the HUD, moved inwards together until
+ *    they clear the ▲/▼ buttons.
+ * A long driver name is shortened (…) only if the two would otherwise meet. The title group is
+ * then centred between the top of the game and the top of whatever sits at its bottom (the
+ * bubbles in landscape, the HUD in portrait).
  */
 function placeBubbles(): void {
   const l = lastLayout;
   if (!l) return;
   const s = l.canvas.w / VIEW_W;
-  const cw = l.canvas.w;
-  driverName.style.maxWidth = '';
-  const bh = Math.max(musicBubble.offsetHeight, driverBubble.offsetHeight);
-  const bottom = START.bubbleBottom * s;
-  const top = bottom - bh;
-  let inset = START.bubbleInset * s;
-  const gap = 6;
-  const clash = (b: { x: number; y: number; w: number; h: number }) => {
-    const y = b.y - l.canvas.y;
-    return y < bottom && y + b.h > top;
+  const below = l.mode === 'below';
+  const setK = (k: number) => {
+    for (const b of [driverBubble, musicBubble]) b.style.setProperty('--k', k.toFixed(3));
   };
-  // Thumb buttons overlapping the bubble row (landscape): move both bubbles inwards, equally.
-  if (clash(l.up)) inset = Math.max(inset, l.up.x + l.up.w - l.canvas.x + gap);
-  if (clash(l.down)) inset = Math.max(inset, l.canvas.x + cw - l.down.x + gap);
+  driverName.style.maxWidth = '';
+  // Where the row can go for a given scale (landscape: inset grows to clear the thumb buttons).
+  const row = (bh: number) => {
+    if (below) {
+      const frameBottom = l.canvas.y + l.canvas.h + 8; // below the game's 8px frame
+      const top = frameBottom + (Math.min(l.up.y, l.down.y) - frameBottom - bh) / 2;
+      return { left: l.up.x, right: l.down.x + l.down.w, top };
+    }
+    const bottom = l.canvas.y + START.bubbleBottom * s;
+    const top = bottom - bh;
+    let inset = START.bubbleInset * s;
+    const clash = (b: { y: number; h: number }) => b.y < bottom && b.y + b.h > top;
+    if (clash(l.up)) inset = Math.max(inset, l.up.x + l.up.w - l.canvas.x + 6);
+    if (clash(l.down)) inset = Math.max(inset, l.canvas.x + l.canvas.w - l.down.x + 6);
+    return { left: l.canvas.x + inset, right: l.canvas.x + l.canvas.w - inset, top };
+  };
+  // Portrait phones: k = 1 (32px tall at 390px wide). Landscape: in proportion to the game, but
+  // only as large as still lets both bubbles fit side by side without shortening the name.
+  let k = 1;
+  if (!below) {
+    k = Math.max(1, s / (390 / VIEW_W));
+    for (; k > 1; k = Math.max(1, k - 0.05)) {
+      setK(k);
+      const r = row(driverBubble.offsetHeight);
+      if (driverBubble.offsetWidth + 10 * k + musicBubble.offsetWidth <= r.right - r.left) break;
+    }
+  }
+  setK(k);
+  const bh = Math.max(musicBubble.offsetHeight, driverBubble.offsetHeight);
+  const { left, right, top } = row(bh);
   const mw = musicBubble.offsetWidth;
-  // Room left for the driver bubble; shorten the name line if needed (never the Spotify credit).
-  const room = cw - 2 * inset - mw - 8;
+  const room = right - left - mw - 10 * k;
   if (driverBubble.offsetWidth > room) {
     const extra = driverBubble.offsetWidth - room;
-    driverName.style.maxWidth = `${Math.max(40, driverName.offsetWidth - extra)}px`;
+    driverName.style.maxWidth = `${Math.max(30, driverName.offsetWidth - extra)}px`;
   }
-  driverBubble.style.left = `${Math.round(inset)}px`;
+  driverBubble.style.left = `${Math.round(left)}px`;
   driverBubble.style.top = `${Math.round(top)}px`;
-  musicBubble.style.left = `${Math.round(cw - inset - mw)}px`;
+  musicBubble.style.left = `${Math.round(right - mw)}px`;
   musicBubble.style.top = `${Math.round(top)}px`;
-  // Centre the title group in the space above the bubbles (logical px).
-  const free = top / s;
+  // Centre the title group above what's at the bottom of the game (logical px).
+  const free = below ? HUD_TOP : (top - l.canvas.y) / s;
   renderer.startTop = Math.max(2, Math.round((free - START.groupH) / 2));
 }
 

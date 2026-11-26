@@ -242,3 +242,10 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] K.5 Deployed (c1290ca) and checked live: read-only against the real project (3,198 tickets) a first-visit phone printed 3,198 with no counting, a phone that last saw 3,193 printed 3,193 and counted up to 3,198, both remembered 3,198 (Chromium + WebKit); 948/948 layout and tap checks, rotation stress test and WebKit play checks pass
 - [x] K.6 Wording shortened to "3,195 tickets issued" ("1 ticket issued"); the bus is implied by the ticket machine
 
+## Start screen bubbles, iPhone fix (smaller, out of the game in portrait)
+- [x] B2.1 Both bubbles share one size rule: 32px tall on portrait phones (21px icons, 5.5px above/below), 8px text on two lines (song / artist; driver / Change name), 11px icon-to-text gap (Spotify clear space 10.5px), the edge closer; each only as wide as its text, at least a 10px gap between them
+- [x] B2.2 Portrait: below the game frame, centred in the empty strip above the ▲/▼ buttons, outer edges lined up with the buttons' outer edges (symmetrical)
+- [x] B2.3 Landscape: inside the game's bottom corners above the HUD, clear of the ▲/▼ buttons, mirrored; scaled with the game but only as far as still fits a 12-character name without shortening
+- [x] B2.4 Title group: still centred between the top of the game and what's at its bottom; in portrait that's now the HUD (the bubbles left the game), in landscape the bubbles. Spacing inside unchanged; counter untouched
+- [x] B2.5 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (978 checks): size, position, symmetry, no overlaps, Spotify rules, no name shortening, bubble taps never start a run or steer
+

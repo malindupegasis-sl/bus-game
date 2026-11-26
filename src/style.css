@@ -32,7 +32,8 @@ body {
 
 /* Positions are set in CSS px by layout() relative to the safe area. */
 #wrap,
-.ctrl {
+.ctrl,
+.bubble {
   position: absolute;
   margin-left: env(safe-area-inset-left);
   margin-top: env(safe-area-inset-top);
@@ -408,18 +409,21 @@ body[data-phase='over'] .ctrl {
  * icon on every side before any edge or text. Positioned by main.ts (placeBubbles).
  */
 .bubble {
-  position: absolute;
+  /* --k scales the whole bubble with the game: 1 on portrait phones (32px tall at 390px wide),
+     larger in landscape, never smaller (the Spotify icon must stay at least 21px). */
+  --k: 1;
   z-index: 3;
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  padding: 11px 13px 11px 11px;
-  gap: 11px;
+  height: calc(32px * var(--k));
+  padding: 0 calc(9px * var(--k)) 0 calc(6px * var(--k));
+  gap: calc(11px * var(--k)); /* Spotify clear space: half the icon height (10.5px at 21px) */
   background: #000;
   border-radius: 999px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
   color: #fff;
-  font: bold 9px/1.25 ui-monospace, Menlo, Consolas, monospace;
+  font: bold calc(8px * var(--k)) / 1.25 ui-monospace, Menlo, Consolas, monospace;
   text-decoration: none;
   white-space: nowrap;
   touch-action: manipulation;
@@ -428,8 +432,11 @@ body[data-phase='over'] .ctrl {
 .bubble-icon {
   display: block;
   flex: none;
-  height: 21px;
+  height: calc(21px * var(--k));
   width: auto;
+}
+svg.bubble-icon {
+  width: calc(22px * var(--k));
 }
 .bubble-text {
   display: flex;
@@ -445,11 +452,7 @@ body[data-phase='over'] .ctrl {
   outline-offset: 2px;
 }
 /* Spotify: the credit wraps after "Gange -" onto two lines. */
-#music-text {
-  display: block;
-  max-width: 23ch;
-  white-space: normal;
-}
+/* Spotify text: two lines (set in main.ts), so the bubble is exactly as wide as the longer one. */
 /* Driver: the whole bubble is a button. Name on line 1 (shortened with … only if a long name
    doesn't fit), "Change name" below, underlined like a link. */
 #btn-name {
