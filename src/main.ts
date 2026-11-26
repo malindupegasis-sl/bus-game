@@ -32,6 +32,9 @@ const btnName = $<HTMLButtonElement>('#btn-name');
 const driverBubble = btnName; // the whole driver bubble is the "Change name" button
 const driverName = $<HTMLSpanElement>('#driver-name');
 musicBubble.href = SPOTIFY_TRACK_URL;
+// The icon's size is known from its width/height attributes, but re-place the bubbles once it has
+// loaded anyway, in case a browser only knows its real width then.
+musicBubble.querySelector('img')?.addEventListener('load', () => placeBubbles());
 // Two lines, split after the dash: "Nandana Sihina Gange -" / "Sangeeth Wijesuriya".
 {
   const cut = MUSIC_CREDIT.indexOf(' - ');
