@@ -250,3 +250,4 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] B2.5 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (978 checks): size, position, symmetry, no overlaps, Spotify rules, no name shortening, bubble taps never start a run or steer
 
 - [x] B2.6 Found on the live site (Chromium, 640x360): if the Spotify icon loaded after the layout ran, the bubble was measured without it and ended up off-centre (portrait: 22px past the right edge; landscape: over the ▼ button). Fixed: the icon has its size attributes again and the bubbles are re-placed when it loads; tested with the icon delayed 1.5 s in Chromium + WebKit
+- [x] B2.7 Deployed (57541cc) and checked live: 978/978 layout and tap checks, late-icon test, rotation stress test, WebKit play checks and the read-only ticket counter check all pass
