@@ -258,3 +258,4 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 - [x] B3.3 Title group centred between the top of the game and the bubbles (spacing unchanged)
 - [x] B3.4 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (1,092 checks): position, size, mirroring, no overlap with title, ticket counter, TAP TO START, the bus, the kerb, the HUD or the thumb buttons; Spotify rules; taps never start a run or steer; only on the start screen; late-loading icon still placed correctly
 
+- [x] B3.5 Screenshots sent before deploying; deployed (3750ecf) and checked live: 1,092/1,092 layout and tap checks, late-icon test, rotation stress test, WebKit play checks and the read-only ticket counter check all pass
