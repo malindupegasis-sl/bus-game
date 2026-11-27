@@ -409,21 +409,21 @@ body[data-phase='over'] .ctrl {
  * icon on every side before any edge or text. Positioned by main.ts (placeBubbles).
  */
 .bubble {
-  /* --k scales the whole bubble with the game: 1 on portrait phones (32px tall at 390px wide),
-     larger in landscape, never smaller (the Spotify icon must stay at least 21px). */
-  --k: 1;
+  /* Compact, fixed size everywhere: the Spotify icon at exactly 21px (Spotify's minimum) with
+     1px above and below, tiny two-line text, and the 11px icon-to-text gap Spotify's clear space
+     needs (half the icon height = 10.5px). The bubble edge sits closer than that, as allowed. */
   z-index: 3;
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  height: calc(32px * var(--k));
-  padding: 0 calc(9px * var(--k)) 0 calc(6px * var(--k));
-  gap: calc(11px * var(--k)); /* Spotify clear space: half the icon height (10.5px at 21px) */
+  height: 23px;
+  padding: 0 4px 0 1px;
+  gap: 11px;
   background: #000;
   border-radius: 999px;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
   color: #fff;
-  font: bold calc(8px * var(--k)) / 1.25 ui-monospace, Menlo, Consolas, monospace;
+  font: bold 6px / 1.2 ui-monospace, Menlo, Consolas, monospace;
   text-decoration: none;
   white-space: nowrap;
   touch-action: manipulation;
@@ -432,11 +432,11 @@ body[data-phase='over'] .ctrl {
 .bubble-icon {
   display: block;
   flex: none;
-  height: calc(21px * var(--k));
+  height: 21px;
   width: auto;
 }
 svg.bubble-icon {
-  width: calc(22px * var(--k));
+  width: 22px;
 }
 .bubble-text {
   display: flex;
@@ -468,5 +468,5 @@ svg.bubble-icon {
 #change-name {
   color: #f8d878;
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-underline-offset: 1px;
 }

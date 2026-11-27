@@ -251,3 +251,10 @@ Notes: Stage 2 (garage) and route 1 were removed at the owner's request; their c
 
 - [x] B2.6 Found on the live site (Chromium, 640x360): if the Spotify icon loaded after the layout ran, the bubble was measured without it and ended up off-centre (portrait: 22px past the right edge; landscape: over the ▼ button). Fixed: the icon has its size attributes again and the bubbles are re-placed when it loads; tested with the icon delayed 1.5 s in Chromium + WebKit
 - [x] B2.7 Deployed (57541cc) and checked live: 978/978 layout and tap checks, late-icon test, rotation stress test, WebKit play checks and the read-only ticket counter check all pass
+
+## Start screen bubbles, round 3 (compact, on the road)
+- [x] B3.1 Both bubbles back inside the game, on the road in its bottom corners, bottoms 1px above the kerb strip (logical y 108); driver bottom left, Spotify bottom right, mirrored to the sub-pixel; same rule in portrait and landscape; in landscape the inset grows equally to clear the ▲/▼ buttons
+- [x] B3.2 Compact fixed size: 23px tall (Spotify icon exactly 21px, steering wheel the same, 1px above and below), 6px two-line text, 11px icon-to-text gap (Spotify clear space 10.5px), 1-4px edge padding, each only as wide as its text. Width: Spotify bubble 31% of the game in 390px portrait (33% at 360px), 18% in landscape; driver bubble with a 12-character name 29% / 31% / 17% ("Driver: Malindu" is under 25%). A quarter in portrait would need ~4.5px text (Spotify's 22-character song line plus the required clear space)
+- [x] B3.3 Title group centred between the top of the game and the bubbles (spacing unchanged)
+- [x] B3.4 Checked in Chromium + WebKit at 390x844, 844x390, 360x640, 640x360, 375x667, 667x375 (1,092 checks): position, size, mirroring, no overlap with title, ticket counter, TAP TO START, the bus, the kerb, the HUD or the thumb buttons; Spotify rules; taps never start a run or steer; only on the start screen; late-loading icon still placed correctly
+

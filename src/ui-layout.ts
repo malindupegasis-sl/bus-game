@@ -15,8 +15,9 @@ export const START = {
   counter: 22,
   tap: 49,
   groupH: 61,
-  bubbleBottom: 116,
-  bubbleInset: 4,
+  /** Bubbles sit on the road, bottoms 1px above the kerb strip (ROAD_BOTTOM = 109). */
+  bubbleBottom: 108,
+  bubbleInset: 3,
   /** Group top used until the bubbles have been measured. */
   defaultTop: 13,
 } as const;
